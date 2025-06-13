@@ -1,0 +1,38 @@
+# Core dependencies for Second Brain AI Assistant
+# Data Processing & Web Scraping
+crawl4ai==0.3.74
+requests==2.31.0
+beautifulsoup4==4.12.3
+markdown==3.6
+
+# Machine Learning & AI
+transformers==4.46.0
+torch==2.5.1
+sentence-transformers==3.3.1
+langchain==0.3.7
+langchain-community==0.3.7
+huggingface-hub==0.26.2
+
+# Vector Database & Search
+pymongo>=4.9,<4.10
+motor==3.6.0
+chromadb==0.5.23
+
+# Data Processing
+pandas==2.2.3
+numpy==1.26.4
+python-dotenv==1.0.1
+
+# API & Web Framework
+fastapi==0.115.6
+uvicorn==0.32.1
+pydantic>=2.7.4,<2.9
+
+# MLOps & Monitoring
+zenml==0.71.0
+comet-ml==3.49.0
+
+# Development & Utilities
+jupyter==1.1.1
+python-multipart==0.0.12
+aiofiles==24.1.0 
