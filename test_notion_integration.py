@@ -71,19 +71,21 @@ async def test_step_3_collect_notion_data():
     print_step(3, "Collect Notion Data")
     
     try:
-        from src.data_pipeline.integrated_collector import collect_second_brain_data
+        from src.data_pipeline.integrated_collector import IntegratedDataCollector
         
         print("📝 Collecting Notion documents...")
-        documents, stats = await collect_second_brain_data(
-            max_crawl_pages=3,  # Small test
-            include_web_crawling=True
+        collector = IntegratedDataCollector()
+        documents = await collector.collect_all_data(
+            notion_api_key=os.getenv("NOTION_API_KEY"),
+            notion_database_id=os.getenv("NOTION_DATABASE_ID"),
+            search_query="",
+            max_crawl_pages=500  # Test with 500 pages
         )
         
         print(f"📊 Collection Results:")
-        print(f"   Total documents: {stats['total_documents']}")
-        print(f"   Notion documents: {stats['notion_documents']}")
-        print(f"   Crawled documents: {stats['crawled_documents']}")
-        print(f"   Total words: {stats['total_word_count']:,}")
+        print(f"   Total documents: {len(documents)}")
+        print(f"   Notion documents: {len(collector.notion_documents)}")
+        print(f"   Crawled documents: {len(collector.crawled_documents)}")
         
         if documents:
             print(f"\n📄 Sample document: '{documents[0].title}'")
@@ -144,7 +146,7 @@ async def test_step_5_mongodb_storage():
         
         print("💾 Running mini ETL pipeline...")
         stats = await run_second_brain_etl(
-            max_crawl_pages=2,  # Very small test
+            max_crawl_pages=500,  # Very small test
             quality_threshold=0.1  # Low threshold for testing
         )
         

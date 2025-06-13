@@ -14,10 +14,9 @@ from crawl4ai.extraction_strategy import LLMExtractionStrategy
 
 from src.models.schemas import Document, DocumentType, ContentSource, CrawlJob, ProcessingStatus
 from src.config.settings import settings
-from src.utils.logger import LoggerMixin
 
 
-class WebCrawler(LoggerMixin):
+class WebCrawler:
     """
     Web crawler for collecting content from web pages.
     Uses Crawl4AI for robust content extraction.
@@ -25,132 +24,59 @@ class WebCrawler(LoggerMixin):
     
     def __init__(self):
         """Initialize the web crawler."""
-        self.visited_urls: Set[str] = set()
+        self.crawler = None
+    
+    async def __aenter__(self):
+        """Initialize the crawler when entering the context."""
+        self.crawler = AsyncWebCrawler()
+        return self
+    
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Clean up resources when exiting the context."""
+        if self.crawler:
+            await self.crawler.aclose()
     
     async def crawl_url(self, url: str) -> Optional[Document]:
         """
-        Crawl a single URL and extract content.
+        Crawl a URL and extract its content.
+        
         Args:
-            url: URL to crawl
+            url: The URL to crawl
+            
         Returns:
-            Document object or None if crawling failed
+            Document object containing the crawled content, or None if crawling failed
         """
         try:
-            self.logger.info(f"Crawling URL: {url}")
-            async with AsyncWebCrawler(
-                verbose=True,
-                headless=True,
-                user_agent=settings.USER_AGENT
-            ) as crawler:
-                result = await crawler.arun(
-                    url=url,
-                    word_count_threshold=50,  # Minimum words for content to be considered
-                    extraction_strategy=LLMExtractionStrategy(
-                        provider="openai/gpt-4o-mini",
-                        api_token=settings.OPENAI_API_KEY,
-                        instruction="Extract the main content, remove navigation, ads, and irrelevant elements."
-                    )
-                )
-            if result.success:
-                # Extract metadata
-                metadata = {
-                    "url": url,
-                    "title": result.metadata.get("title", ""),
-                    "description": result.metadata.get("description", ""),
-                    "keywords": result.metadata.get("keywords", []),
-                    "author": result.metadata.get("author", ""),
-                    "published_date": result.metadata.get("published_date", ""),
-                    "word_count": len(result.cleaned_html.split()) if result.cleaned_html else 0,
-                    "crawl_timestamp": datetime.utcnow().isoformat(),
-                    "status_code": result.status_code,
-                }
-                document = Document(
-                    title=result.metadata.get("title", urlparse(url).path),
-                    content=result.markdown or result.cleaned_html or "",
-                    source=ContentSource.WEB_CRAWL,
-                    source_url=url,
-                    document_type=DocumentType.WEB_PAGE,
-                    metadata=metadata,
-                    word_count=metadata["word_count"],
-                    processing_status=ProcessingStatus.COMPLETED
-                )
-                self.visited_urls.add(url)
-                self.logger.info(f"Successfully crawled: {url}")
-                return document
-            else:
-                self.logger.error(f"Failed to crawl {url}: {result.error_message}")
+            if not self.crawler:
+                self.crawler = AsyncWebCrawler()
+            result = await self.crawler.arun(url=url)
+            if not result or not getattr(result, "markdown", None):
+                print(f"No content found at {url}")
                 return None
+            return Document(
+                title=getattr(result, "title", url),
+                content=result.markdown,
+                source=ContentSource.WEB_CRAWL,
+                source_url=url,
+                document_type=DocumentType.WEB_PAGE,
+                metadata={
+                    "crawl_date": datetime.now().isoformat()
+                }
+            )
         except Exception as e:
-            self.logger.error(f"Error crawling {url}: {str(e)}")
+            print(f"Error crawling {url}: {str(e)}")
             return None
 
-    async def crawl_multiple_urls(self, urls: List[str]) -> List[Document]:
-        """
-        Crawl multiple URLs concurrently.
-        Args:
-            urls: List of URLs to crawl
-        Returns:
-            List of successfully crawled documents
-        """
-        self.logger.info(f"Starting to crawl {len(urls)} URLs")
+    async def crawl_urls(self, urls: List[str]) -> List[Document]:
+        """Crawl multiple URLs and return a list of Document objects."""
         documents = []
-        semaphore = asyncio.Semaphore(5)  # Limit to 5 concurrent requests
-        async with AsyncWebCrawler(
-            verbose=True,
-            headless=True,
-            user_agent=settings.USER_AGENT
-        ) as crawler:
-            async def bounded_crawl(url):
-                async with semaphore:
-                    try:
-                        result = await crawler.arun(
-                            url=url,
-                            word_count_threshold=50,
-                            extraction_strategy=LLMExtractionStrategy(
-                                provider="openai/gpt-4o-mini",
-                                api_token=settings.OPENAI_API_KEY,
-                                instruction="Extract the main content, remove navigation, ads, and irrelevant elements."
-                            )
-                        )
-                        if result.success:
-                            metadata = {
-                                "url": url,
-                                "title": result.metadata.get("title", ""),
-                                "description": result.metadata.get("description", ""),
-                                "keywords": result.metadata.get("keywords", []),
-                                "author": result.metadata.get("author", ""),
-                                "published_date": result.metadata.get("published_date", ""),
-                                "word_count": len(result.cleaned_html.split()) if result.cleaned_html else 0,
-                                "crawl_timestamp": datetime.utcnow().isoformat(),
-                                "status_code": result.status_code,
-                            }
-                            document = Document(
-                                title=result.metadata.get("title", urlparse(url).path),
-                                content=result.markdown or result.cleaned_html or "",
-                                source=ContentSource.WEB_CRAWL,
-                                source_url=url,
-                                document_type=DocumentType.WEB_PAGE,
-                                metadata=metadata,
-                                word_count=metadata["word_count"],
-                                processing_status=ProcessingStatus.COMPLETED
-                            )
-                            self.visited_urls.add(url)
-                            self.logger.info(f"Successfully crawled: {url}")
-                            return document
-                        else:
-                            self.logger.error(f"Failed to crawl {url}: {result.error_message}")
-                            return None
-                    except Exception as e:
-                        self.logger.error(f"Error crawling {url}: {str(e)}")
-                        return None
-            tasks = [bounded_crawl(url) for url in urls]
-            results = await asyncio.gather(*tasks, return_exceptions=True)
-            for i, result in enumerate(results):
-                if isinstance(result, Document):
-                    documents.append(result)
-                elif isinstance(result, Exception):
-                    self.logger.error(f"Error crawling {urls[i]}: {str(result)}")
-        self.logger.info(f"Successfully crawled {len(documents)} out of {len(urls)} URLs")
+        
+        async with self:
+            for url in urls:
+                doc = await self.crawl_url(url)
+                if doc:
+                    documents.append(doc)
+        
         return documents
     
     def extract_links(self, content: str, base_url: str) -> List[str]:
@@ -230,7 +156,7 @@ class WebCrawler(LoggerMixin):
         )
         
         try:
-            self.logger.info(f"Starting website crawl from: {start_url}")
+            print(f"Starting website crawl from: {start_url}")
             
             urls_to_crawl = [start_url]
             crawled_urls = set()
@@ -240,10 +166,10 @@ class WebCrawler(LoggerMixin):
                 if not urls_to_crawl or len(crawled_urls) >= max_pages:
                     break
                 
-                self.logger.info(f"Crawling depth {depth + 1}, {len(urls_to_crawl)} URLs")
+                print(f"Crawling depth {depth + 1}, {len(urls_to_crawl)} URLs")
                 
                 # Crawl current batch
-                batch_documents = await self.crawl_multiple_urls(urls_to_crawl[:max_pages - len(crawled_urls)])
+                batch_documents = await self.crawl_urls(urls_to_crawl[:max_pages - len(crawled_urls)])
                 documents.extend(batch_documents)
                 
                 # Update crawled URLs
@@ -255,7 +181,7 @@ class WebCrawler(LoggerMixin):
                 next_urls = set()
                 for doc in batch_documents:
                     if doc.content:
-                        links = self.extract_links(doc.content, doc.source_url)
+                        links = self.extract_links(doc.content, doc.url)
                         filtered_links = self.filter_urls_by_domain(links, allowed_domains)
                         next_urls.update(filtered_links)
                 
@@ -272,10 +198,10 @@ class WebCrawler(LoggerMixin):
             crawl_job.pages_crawled = len(crawled_urls)
             crawl_job.pages_processed = len(documents)
             
-            self.logger.info(f"Website crawl completed. Crawled {len(documents)} pages successfully")
+            print(f"Website crawl completed. Crawled {len(documents)} pages successfully")
             
         except Exception as e:
-            self.logger.error(f"Website crawl failed: {str(e)}")
+            print(f"Website crawl failed: {str(e)}")
             crawl_job.status = ProcessingStatus.FAILED
             crawl_job.completed_at = datetime.utcnow()
         

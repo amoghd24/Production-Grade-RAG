@@ -20,7 +20,10 @@ async def main():
 
     # Step 2: Crawl embedded links (if any)
     if getattr(collector, 'embedded_urls', []):
-        await collector._crawl_embedded_links(max_pages=3)
+        # For testing, limit to 10 URLs
+        test_urls = collector.embedded_urls[:10]
+        print(f"\nTesting with first 10 URLs out of {len(collector.embedded_urls)} total URLs")
+        await collector._crawl_embedded_links(max_pages=10)
         print(f"Step 2: Crawled {len(collector.crawled_documents)} web documents")
         if collector.crawled_documents:
             print("Sample crawled doc title:", collector.crawled_documents[0].title)

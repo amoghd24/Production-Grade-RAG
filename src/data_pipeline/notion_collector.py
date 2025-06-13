@@ -158,7 +158,9 @@ class NotionCollector(LoggerMixin):
         try:
             response = self.session.get(url)
             response.raise_for_status()
-            return response.json()
+            data = response.json()
+            self.logger.info(f"Page content data: {data}")  # Add this line to see the raw data
+            return data
         except requests.exceptions.RequestException as e:
             self.logger.error(f"Error getting page content for {page_id}: {str(e)}")
             return {}
@@ -171,9 +173,36 @@ class NotionCollector(LoggerMixin):
         text_parts = []
         for item in rich_text:
             if item.get("type") == "text":
-                text_parts.append(item.get("text", {}).get("content", ""))
+                text = item.get("text", {}).get("content", "")
+                # Handle links in text
+                if item.get("href"):
+                    self.logger.info(f"Found link in rich text: {text} -> {item['href']}")
+                    text = f"[{text}]({item['href']})"
+                text_parts.append(text)
         
         return "".join(text_parts)
+    
+    def get_table_rows(self, table_id: str) -> List[Dict[str, Any]]:
+        """
+        Get the rows of a table block.
+        
+        Args:
+            table_id: ID of the table block
+            
+        Returns:
+            List of table row objects
+        """
+        url = f"{self.base_url}/blocks/{table_id}/children"
+        
+        try:
+            response = self.session.get(url)
+            response.raise_for_status()
+            data = response.json()
+            self.logger.info(f"Table rows data: {data}")
+            return data.get("results", [])
+        except requests.exceptions.RequestException as e:
+            self.logger.error(f"Error getting table rows for {table_id}: {str(e)}")
+            return []
     
     def block_to_markdown(self, block: Dict[str, Any]) -> str:
         """
@@ -188,8 +217,44 @@ class NotionCollector(LoggerMixin):
         block_type = block.get("type", "")
         block_data = block.get(block_type, {})
         
-        if block_type == "paragraph":
-            text = self.extract_text_from_rich_text(block_data.get("rich_text", []))
+        # Debug log the block type and data
+        self.logger.info(f"Processing block type: {block_type}")
+        
+        if block_type == "table":
+            # Get table rows
+            table_id = block.get("id")
+            rows = self.get_table_rows(table_id)
+            self.logger.info(f"Table rows: {rows}")
+            
+            # Process table content
+            table_content = []
+            for row in rows:
+                row_content = []
+                cells = row.get("table_row", {}).get("cells", [])
+                self.logger.info(f"Row cells: {cells}")
+                
+                for cell in cells:
+                    self.logger.info(f"Processing cell content: {cell}")
+                    cell_text = self.extract_text_from_rich_text(cell)
+                    self.logger.info(f"Extracted cell text: {cell_text}")
+                    row_content.append(cell_text)
+                
+                table_content.append("| " + " | ".join(row_content) + " |")
+            
+            # Add header separator
+            if table_content:
+                header = table_content[0]
+                separator = "|" + "|".join(["---" for _ in header.split("|")[1:-1]]) + "|"
+                table_content.insert(1, separator)
+            
+            markdown_table = "\n".join(table_content) + "\n\n"
+            self.logger.info(f"Generated markdown table: {markdown_table}")
+            return markdown_table
+        
+        elif block_type == "paragraph":
+            rich_text = block_data.get("rich_text", [])
+            self.logger.info(f"Paragraph rich text: {rich_text}")
+            text = self.extract_text_from_rich_text(rich_text)
             return f"{text}\n\n"
         
         elif block_type == "heading_1":
@@ -282,6 +347,9 @@ class NotionCollector(LoggerMixin):
         Returns:
             List of URLs found in the content
         """
+        # Debug log the content being processed
+        self.logger.info(f"Extracting links from content: {markdown_content[:200]}...")
+        
         # Pattern to match markdown links [text](url) and plain URLs
         link_patterns = [
             r'\[([^\]]+)\]\(([^)]+)\)',  # Markdown links
@@ -298,12 +366,18 @@ class NotionCollector(LoggerMixin):
                 # Direct URL matches
                 urls.extend(matches)
         
+        # Debug log found URLs
+        self.logger.info(f"Found URLs: {urls}")
+        
         # Clean and validate URLs
         clean_urls = []
         for url in urls:
             url = url.strip()
             if url and self.is_valid_url(url):
                 clean_urls.append(url)
+        
+        # Debug log cleaned URLs
+        self.logger.info(f"Cleaned URLs: {clean_urls}")
         
         return list(set(clean_urls))  # Remove duplicates
     
@@ -455,39 +529,3 @@ async def collect_notion_documents(
     embedded_urls = collector.get_embedded_urls()
     
     return documents, embedded_urls
-
-
-# CLI for testing
-async def main():
-    """Test the Notion collector."""
-    import os
-    
-    # Test with environment variables
-    api_key = os.getenv("NOTION_API_KEY")
-    database_id = os.getenv("NOTION_DATABASE_ID")
-    
-    if not api_key:
-        print("Please set NOTION_API_KEY environment variable")
-        return
-    
-    print("🔍 Testing Notion collector...")
-    
-    documents, urls = await collect_notion_documents(
-        api_key=api_key,
-        database_id=database_id
-    )
-    
-    print(f"✅ Collected {len(documents)} documents")
-    print(f"🔗 Found {len(urls)} embedded URLs")
-    
-    if documents:
-        print(f"\n📄 First document:")
-        doc = documents[0]
-        print(f"Title: {doc.title}")
-        print(f"Content length: {len(doc.content)} chars")
-        print(f"Word count: {doc.word_count}")
-        print(f"Embedded links: {len(doc.metadata.get('embedded_links', []))}")
-
-
-if __name__ == "__main__":
-    asyncio.run(main()) 
