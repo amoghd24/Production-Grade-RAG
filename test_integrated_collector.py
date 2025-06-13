@@ -80,7 +80,7 @@ async def test_integrated_collector() -> Dict[str, Any]:
             
             # Store all collected documents content
             for doc in documents:
-                results["crawled_content"][doc.source_url] = {
+                results["crawled_content"][str(doc.source_url)] = {
                     "title": doc.title,
                     "content": doc.content,
                     "word_count": doc.word_count,

@@ -4,7 +4,7 @@ Combines Notion API collection with web crawling as described in DecodingML cour
 """
 
 import asyncio
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional, Tuple, Set
 from datetime import datetime
 
 from src.data_pipeline.notion_collector import collect_notion_documents, NotionCollector
@@ -28,13 +28,15 @@ class IntegratedDataCollector(LoggerMixin):
         self.notion_documents: List[Document] = []
         self.crawled_documents: List[Document] = []
         self.all_documents: List[Document] = []
+        self.embedded_urls: Set[str] = set()
     
     async def collect_all_data(
         self,
         notion_api_key: str,
         notion_database_id: str,
         search_query: str = "",
-        max_crawl_pages: int = 1000000
+        max_crawl_pages: int = 1000000,
+        include_web_crawling: bool = True
     ) -> List[Document]:
         """Collect data from all sources."""
         try:
@@ -45,8 +47,8 @@ class IntegratedDataCollector(LoggerMixin):
                 search_query=search_query
             )
             
-            # Step 2: Crawl embedded links if any found
-            if self.embedded_urls:
+            # Step 2: Crawl embedded links if any found and if web crawling is enabled
+            if self.embedded_urls and include_web_crawling:
                 await self._crawl_embedded_links(max_pages=max_crawl_pages)
             
             # Step 3: Combine all documents
@@ -151,7 +153,7 @@ class IntegratedDataCollector(LoggerMixin):
 async def collect_second_brain_data(
     notion_api_key: Optional[str] = None,
     notion_database_id: Optional[str] = None,
-    max_crawl_pages: int = 100,
+    max_crawl_pages: int = 1000,
     include_web_crawling: bool = True
 ) -> Tuple[List[Document], Dict[str, any]]:
     """

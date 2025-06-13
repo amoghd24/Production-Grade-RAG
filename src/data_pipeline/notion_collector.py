@@ -372,7 +372,11 @@ class NotionCollector(LoggerMixin):
         # Clean and validate URLs
         clean_urls = []
         for url in urls:
-            url = url.strip()
+            # Remove any trailing punctuation or brackets
+            url = url.strip('.,;:!?)]')
+            # Remove any markdown link text if present
+            if '](' in url:
+                url = url.split('](')[-1]
             if url and self.is_valid_url(url):
                 clean_urls.append(url)
         
