@@ -44,7 +44,7 @@ class SecondBrainETLPipeline(LoggerMixin):
     
     async def run_complete_pipeline(
         self,
-        notion_api_key: Optional[str] = None,
+        NOTION_SECRET_KEY: Optional[str] = None,
         notion_database_id: Optional[str] = None,
         max_crawl_pages: int = 100,
         quality_threshold: float = 0.5,
@@ -55,7 +55,7 @@ class SecondBrainETLPipeline(LoggerMixin):
         Run the complete ETL pipeline.
         
         Args:
-            notion_api_key: Notion API key
+            NOTION_SECRET_KEY: Notion API key
             notion_database_id: Specific database to collect from
             max_crawl_pages: Maximum pages to crawl
             quality_threshold: Minimum quality score for storage
@@ -72,7 +72,7 @@ class SecondBrainETLPipeline(LoggerMixin):
             
             # Step 1: Extract - Data Collection
             documents = await self._extract_data(
-                notion_api_key=notion_api_key,
+                notion_api_key=NOTION_SECRET_KEY,
                 notion_database_id=notion_database_id,
                 max_crawl_pages=max_crawl_pages
             )
@@ -296,7 +296,7 @@ class SecondBrainETLPipeline(LoggerMixin):
 
 # Convenience functions
 async def run_second_brain_etl(
-    notion_api_key: Optional[str] = None,
+    NOTION_SECRET_KEY: Optional[str] = None,
     notion_database_id: Optional[str] = None,
     max_crawl_pages: int = 100,
     quality_threshold: float = 0.5
@@ -305,7 +305,7 @@ async def run_second_brain_etl(
     Run the complete Second Brain ETL pipeline.
     
     Args:
-        notion_api_key: Notion API key
+        NOTION_SECRET_KEY: Notion API key
         notion_database_id: Specific database to collect from
         max_crawl_pages: Maximum pages to crawl
         quality_threshold: Minimum quality score for storage
@@ -316,7 +316,7 @@ async def run_second_brain_etl(
     pipeline = SecondBrainETLPipeline()
     
     return await pipeline.run_complete_pipeline(
-        notion_api_key=notion_api_key,
+        NOTION_SECRET_KEY=NOTION_SECRET_KEY,
         notion_database_id=notion_database_id,
         max_crawl_pages=max_crawl_pages,
         quality_threshold=quality_threshold,
@@ -334,22 +334,22 @@ async def main():
     print("="*50)
     
     # Get configuration
-    notion_api_key = os.getenv("NOTION_API_KEY")
+    NOTION_SECRET_KEY = os.getenv("NOTION_SECRET_KEY")
     notion_database_id = os.getenv("NOTION_DATABASE_ID")
     
-    if not notion_api_key:
-        print("❌ NOTION_API_KEY environment variable not set!")
+    if not NOTION_SECRET_KEY:
+        print("❌ NOTION_SECRET_KEY environment variable not set!")
         print("📖 Run: python setup_notion.py")
         return
     
-    print(f"🔑 Using API key: {notion_api_key[:20]}...")
+    print(f"🔑 Using API key: {NOTION_SECRET_KEY[:20]}...")
     if notion_database_id:
         print(f"📊 Target database: {notion_database_id}")
     
     # Run pipeline
     try:
         stats = await run_second_brain_etl(
-            notion_api_key=notion_api_key,
+            NOTION_SECRET_KEY=NOTION_SECRET_KEY,
             notion_database_id=notion_database_id,
             max_crawl_pages=50,  # Reasonable limit
             quality_threshold=0.3  # Lower threshold for initial collection

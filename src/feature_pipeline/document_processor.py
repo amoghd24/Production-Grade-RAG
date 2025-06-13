@@ -118,16 +118,10 @@ class DocumentProcessor(LoggerMixin):
         # Content richness score (25% weight)
         richness_score = 0.0
         
-        # Check for technical terms (AI/ML context)
-        technical_terms = [
-            'machine learning', 'artificial intelligence', 'deep learning',
-            'neural network', 'algorithm', 'model', 'data science',
-            'python', 'tensorflow', 'pytorch', 'llm', 'gpt', 'transformer'
-        ]
-        
-        content_lower = document.content.lower()
-        found_terms = sum(1 for term in technical_terms if term in content_lower)
-        richness_score += min(1.0, found_terms / 5)  # Normalize to 5 terms
+        # Check for content structure and formatting
+        # Headers, lists, and paragraphs indicate well-structured content
+        structure_elements = len(re.findall(r'^#{1,6}\s+.+|^\s*[-*+]\s+.+|^\s*\d+\.\s+.+', document.content, re.MULTILINE))
+        richness_score = min(1.0, structure_elements / 10)  # Normalize to 10 elements
         
         score += 0.25 * richness_score
         
