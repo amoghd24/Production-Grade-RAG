@@ -7,7 +7,7 @@ async def test_crawler():
     if doc:
         print("Title:", doc.title)
         print("Content length:", len(doc.content))
-        print("Sample content:", doc.content[:300])
+        print("Sample content:", doc.content[:3000])
     else:
         print("Crawling failed.")
 

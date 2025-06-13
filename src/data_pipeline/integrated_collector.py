@@ -11,6 +11,7 @@ from src.data_pipeline.notion_collector import collect_notion_documents, NotionC
 from src.data_pipeline.web_crawler import WebCrawler
 from src.models.schemas import Document, ProcessingStatus
 from src.utils.logger import LoggerMixin
+from src.data_pipeline.web_crawler import BrowserConfig, CrawlerRunConfig, MemoryAdaptiveDispatcher, AsyncWebCrawler
 
 
 class IntegratedDataCollector(LoggerMixin):
@@ -89,10 +90,28 @@ class IntegratedDataCollector(LoggerMixin):
             return
 
         try:
-            async with WebCrawler() as crawler:
-                crawled_docs = await crawler.crawl_urls(self.embedded_urls[:max_pages])
-                if crawled_docs:
-                    self.crawled_documents.extend(crawled_docs)
+            browser_config = BrowserConfig(headless=True, verbose=False)
+            run_config = CrawlerRunConfig(cache_mode="BYPASS", stream=False)
+            dispatcher = MemoryAdaptiveDispatcher(
+                memory_threshold_percent=70.0,
+                check_interval=1.0,
+                max_session_permit=10
+            )
+
+            async with AsyncWebCrawler(config=browser_config) as crawler:
+                results = await crawler.arun_many(
+                    urls=self.embedded_urls[:max_pages],
+                    config=run_config,
+                    dispatcher=dispatcher
+                )
+                
+                for result in results:
+                    if result.get('success'):
+                        doc = await crawler.crawl_url(result['url'])
+                        if doc:
+                            self.crawled_documents.append(doc)
+                    else:
+                        self.logger.error(f"Failed to crawl {result['url']}: {result.get('error_message')}")
                 
         except Exception as e:
             raise Exception(f"Error crawling embedded links: {str(e)}")
@@ -152,8 +171,7 @@ async def collect_second_brain_data(
     documents = await collector.collect_all_data(
         notion_api_key=notion_api_key,
         notion_database_id=notion_database_id,
-        max_crawl_pages=max_crawl_pages,
-        crawl_embedded_links=include_web_crawling
+        max_crawl_pages=max_crawl_pages
     )
     
     stats = collector.get_collection_stats()
