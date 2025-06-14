@@ -139,8 +139,8 @@ class DocumentProcessor(LoggerMixin):
             url_str = str(document.source_url).lower()
             # Higher score for educational/technical domains
             credible_domains = [
-                'edu', 'org', 'github', 'arxiv', 'medium', 'towards',
-                'machinelearning', 'ai', 'deeplearning'
+                'yahoo', 'org', 'realmadrid', 'psg', 'inter', 'porto', 'benfica',
+                'apple', 'ai', 'nvidia', 'google', 'microsoft', 'amazon', 'meta',
             ]
             if any(domain in url_str for domain in credible_domains):
                 credibility_score = 0.8
@@ -339,56 +339,3 @@ class DocumentProcessor(LoggerMixin):
         self.logger.info(f"Batch processing completed: {successful}/{len(documents)} successful")
         
         return results
-
-
-async def main():
-    """Test the document processor."""
-    from src.models.schemas import DocumentType, ContentSource
-    
-    # Create test document
-    test_doc = Document(
-        id="test_doc_1",
-        title="Machine Learning Fundamentals",
-        content="""
-        # Machine Learning Fundamentals
-        
-        Machine learning is a subset of artificial intelligence that focuses on algorithms
-        and statistical models that computer systems use to perform tasks without explicit
-        instructions.
-        
-        ## Key Concepts
-        
-        - **Supervised Learning**: Learning with labeled data
-        - **Unsupervised Learning**: Finding patterns in unlabeled data
-        - **Reinforcement Learning**: Learning through interaction with environment
-        
-        ### Applications
-        
-        Machine learning has numerous applications including:
-        1. Image recognition
-        2. Natural language processing
-        3. Recommendation systems
-        4. Predictive analytics
-        
-        The field continues to evolve with new techniques like deep learning and
-        transformer models revolutionizing how we approach complex problems.
-        """,
-        source=ContentSource.UPLOAD,
-        document_type=DocumentType.MARKDOWN
-    )
-    
-    # Process document
-    processor = DocumentProcessor()
-    result = await processor.process_document(test_doc)
-    
-    print(f"Processing Result:")
-    print(f"- Processed: {result['processed']}")
-    print(f"- Quality Score: {result['quality_score']:.3f}")
-    print(f"- Chunks: {result.get('chunk_count', 0)}")
-    
-    if result['chunks']:
-        print(f"- First chunk preview: {result['chunks'][0].content[:100]}...")
-
-
-if __name__ == "__main__":
-    asyncio.run(main()) 

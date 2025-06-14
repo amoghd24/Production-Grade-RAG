@@ -44,9 +44,9 @@ class SecondBrainETLPipeline(LoggerMixin):
     
     async def run_complete_pipeline(
         self,
-        NOTION_SECRET_KEY: Optional[str] = None,
+        notion_api_key: Optional[str] = None,
         notion_database_id: Optional[str] = None,
-        max_crawl_pages: int = 100,
+        max_crawl_pages: int = 1000,
         quality_threshold: float = 0.5,
         store_to_mongodb: bool = True,
         save_local_backup: bool = True
@@ -55,7 +55,7 @@ class SecondBrainETLPipeline(LoggerMixin):
         Run the complete ETL pipeline.
         
         Args:
-            NOTION_SECRET_KEY: Notion API key
+            notion_api_key: Notion API key
             notion_database_id: Specific database to collect from
             max_crawl_pages: Maximum pages to crawl
             quality_threshold: Minimum quality score for storage
@@ -72,7 +72,7 @@ class SecondBrainETLPipeline(LoggerMixin):
             
             # Step 1: Extract - Data Collection
             documents = await self._extract_data(
-                notion_api_key=NOTION_SECRET_KEY,
+                notion_api_key=notion_api_key,
                 notion_database_id=notion_database_id,
                 max_crawl_pages=max_crawl_pages
             )
@@ -109,7 +109,7 @@ class SecondBrainETLPipeline(LoggerMixin):
         self,
         notion_api_key: Optional[str] = None,
         notion_database_id: Optional[str] = None,
-        max_crawl_pages: int = 100
+        max_crawl_pages: int = 1000
     ) -> List[Document]:
         """Extract data from Notion and web crawling."""
         self.logger.info("📥 EXTRACT: Starting data collection...")
@@ -296,7 +296,7 @@ class SecondBrainETLPipeline(LoggerMixin):
 
 # Convenience functions
 async def run_second_brain_etl(
-    NOTION_SECRET_KEY: Optional[str] = None,
+    notion_api_key: Optional[str] = None,
     notion_database_id: Optional[str] = None,
     max_crawl_pages: int = 100,
     quality_threshold: float = 0.5
@@ -305,7 +305,7 @@ async def run_second_brain_etl(
     Run the complete Second Brain ETL pipeline.
     
     Args:
-        NOTION_SECRET_KEY: Notion API key
+        notion_api_key: Notion API key
         notion_database_id: Specific database to collect from
         max_crawl_pages: Maximum pages to crawl
         quality_threshold: Minimum quality score for storage
@@ -316,55 +316,10 @@ async def run_second_brain_etl(
     pipeline = SecondBrainETLPipeline()
     
     return await pipeline.run_complete_pipeline(
-        NOTION_SECRET_KEY=NOTION_SECRET_KEY,
+        notion_api_key=notion_api_key,
         notion_database_id=notion_database_id,
         max_crawl_pages=max_crawl_pages,
         quality_threshold=quality_threshold,
         store_to_mongodb=True,
         save_local_backup=True
     )
-
-
-# CLI for running the complete pipeline
-async def main():
-    """Run the complete ETL pipeline from command line."""
-    import os
-    
-    print("🧠 Second Brain AI Assistant - ETL Pipeline")
-    print("="*50)
-    
-    # Get configuration
-    NOTION_SECRET_KEY = os.getenv("NOTION_SECRET_KEY")
-    notion_database_id = os.getenv("NOTION_DATABASE_ID")
-    
-    if not NOTION_SECRET_KEY:
-        print("❌ NOTION_SECRET_KEY environment variable not set!")
-        print("📖 Run: python setup_notion.py")
-        return
-    
-    print(f"🔑 Using API key: {NOTION_SECRET_KEY[:20]}...")
-    if notion_database_id:
-        print(f"📊 Target database: {notion_database_id}")
-    
-    # Run pipeline
-    try:
-        stats = await run_second_brain_etl(
-            NOTION_SECRET_KEY=NOTION_SECRET_KEY,
-            notion_database_id=notion_database_id,
-            max_crawl_pages=50,  # Reasonable limit
-            quality_threshold=0.3  # Lower threshold for initial collection
-        )
-        
-        print("\n🎉 ETL Pipeline completed successfully!")
-        print(f"📈 Final stats: {stats['documents_stored']} documents stored")
-        
-    except Exception as e:
-        print(f"\n❌ ETL Pipeline failed: {str(e)}")
-        return 1
-    
-    return 0
-
-
-if __name__ == "__main__":
-    import sys
-    sys.exit(asyncio.run(main())) 
