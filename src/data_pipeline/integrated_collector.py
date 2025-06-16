@@ -1,6 +1,6 @@
 """
-Integrated data collection pipeline for the Second Brain AI Assistant.
-Combines Notion API collection with web crawling as described in DecodingML course.
+Restructured data collection pipeline for the Second Brain AI Assistant.
+Each class handles a specific responsibility in the data collection process.
 """
 
 import asyncio
@@ -8,65 +8,25 @@ from typing import List, Dict, Optional, Tuple, Set
 from datetime import datetime
 
 from src.data_pipeline.notion_collector import collect_notion_documents, NotionCollector
-from src.data_pipeline.web_crawler import WebCrawler
+from src.data_pipeline.web_crawler import WebCrawler, BrowserConfig, CrawlerRunConfig, MemoryAdaptiveDispatcher, AsyncWebCrawler
 from src.models.schemas import Document, ProcessingStatus
 from src.utils.logger import LoggerMixin
-from src.data_pipeline.web_crawler import BrowserConfig, CrawlerRunConfig, MemoryAdaptiveDispatcher, AsyncWebCrawler
 
-
-class IntegratedDataCollector(LoggerMixin):
-    """
-    Integrated data collector following DecodingML methodology:
-    1. Collect Notion documents
-    2. Extract embedded links
-    3. Crawl embedded links
-    4. Combine all documents
-    """
+class NotionDataCollector(LoggerMixin):
+    """Handles collection of documents from Notion workspace"""
     
     def __init__(self):
-        """Initialize the integrated collector."""
         self.notion_documents: List[Document] = []
-        self.crawled_documents: List[Document] = []
-        self.all_documents: List[Document] = []
         self.embedded_urls: Set[str] = set()
     
-    async def collect_all_data(
-        self,
-        notion_api_key: str,
-        notion_database_id: str,
-        search_query: str = "",
-        max_crawl_pages: int = 1000000,
-        include_web_crawling: bool = True
-    ) -> List[Document]:
-        """Collect data from all sources."""
-        try:
-            # Step 1: Collect Notion data
-            await self._collect_notion_data(
-                api_key=notion_api_key,
-                database_id=notion_database_id,
-                search_query=search_query
-            )
-            
-            # Step 2: Crawl embedded links if any found and if web crawling is enabled
-            if self.embedded_urls and include_web_crawling:
-                await self._crawl_embedded_links(max_pages=max_crawl_pages)
-            
-            # Step 3: Combine all documents
-            self._combine_documents()
-            
-            return self.all_documents
-            
-        except Exception as e:
-            raise Exception(f"Error in data collection: {str(e)}")
-    
-    async def _collect_notion_data(
+    async def collect(
         self,
         api_key: Optional[str] = None,
         database_id: Optional[str] = None,
         search_query: str = ""
-    ) -> None:
-        """Collect documents from Notion workspace."""
-        self.logger.info("📝 Step 1: Collecting Notion documents...")
+    ) -> Tuple[List[Document], Set[str]]:
+        """Collect documents from Notion workspace"""
+        self.logger.info("📝 Collecting Notion documents...")
         
         try:
             documents, embedded_urls = await collect_notion_documents(
@@ -81,15 +41,26 @@ class IntegratedDataCollector(LoggerMixin):
             self.logger.info(f"✅ Collected {len(documents)} Notion documents")
             self.logger.info(f"🔗 Found {len(embedded_urls)} embedded URLs")
             
+            return self.notion_documents, self.embedded_urls
+            
         except Exception as e:
             self.logger.error(f"❌ Error collecting Notion data: {str(e)}")
-            self.notion_documents = []
-            self.embedded_urls = []
+            return [], set()
+
+class WebDataCollector(LoggerMixin):
+    """Handles crawling of embedded links"""
     
-    async def _crawl_embedded_links(self, max_pages: int = 1000000) -> None:
-        """Crawl embedded links from Notion documents."""
-        if not self.embedded_urls:
-            return
+    def __init__(self):
+        self.crawled_documents: List[Document] = []
+    
+    async def collect(
+        self,
+        urls: Set[str],
+        max_pages: int = 1000000
+    ) -> List[Document]:
+        """Crawl embedded links from documents"""
+        if not urls:
+            return []
 
         try:
             browser_config = BrowserConfig(headless=True, verbose=False)
@@ -102,7 +73,7 @@ class IntegratedDataCollector(LoggerMixin):
 
             async with AsyncWebCrawler(config=browser_config) as crawler:
                 results = await crawler.arun_many(
-                    urls=self.embedded_urls[:max_pages],
+                    urls=list(urls)[:max_pages],
                     config=run_config,
                     dispatcher=dispatcher
                 )
@@ -115,17 +86,37 @@ class IntegratedDataCollector(LoggerMixin):
                     else:
                         self.logger.error(f"Failed to crawl {result['url']}: {result.get('error_message')}")
                 
+            return self.crawled_documents
+                
         except Exception as e:
-            raise Exception(f"Error crawling embedded links: {str(e)}")
+            self.logger.error(f"Error crawling embedded links: {str(e)}")
+            return []
+
+class DocumentCombiner(LoggerMixin):
+    """Handles combining documents and generating statistics"""
     
-    def _combine_documents(self) -> None:
-        """Combine all collected documents."""
+    def __init__(self):
+        self.all_documents: List[Document] = []
+        self.notion_documents: List[Document] = []
+        self.crawled_documents: List[Document] = []
+    
+    def combine(
+        self,
+        notion_documents: List[Document],
+        crawled_documents: List[Document]
+    ) -> Tuple[List[Document], Dict[str, any]]:
+        """Combine documents and generate statistics"""
+        self.notion_documents = notion_documents
+        self.crawled_documents = crawled_documents
         self.all_documents = []
-        self.all_documents.extend(self.notion_documents)
-        self.all_documents.extend(self.crawled_documents)
+        self.all_documents.extend(notion_documents)
+        self.all_documents.extend(crawled_documents)
+        
+        stats = self._generate_stats()
+        return self.all_documents, stats
     
-    def get_collection_stats(self) -> Dict[str, any]:
-        """Get statistics about the collected data."""
+    def _generate_stats(self) -> Dict[str, any]:
+        """Generate statistics about the collected data"""
         stats = {
             "total_documents": len(self.all_documents),
             "notion_documents": len(self.notion_documents),
@@ -147,35 +138,3 @@ class IntegratedDataCollector(LoggerMixin):
             stats["document_types"][doc_type] = stats["document_types"].get(doc_type, 0) + 1
         
         return stats
-
-
-# Convenience functions for easy use
-async def collect_second_brain_data(
-    notion_api_key: Optional[str] = None,
-    notion_database_id: Optional[str] = None,
-    max_crawl_pages: int = 1000,
-    include_web_crawling: bool = True
-) -> Tuple[List[Document], Dict[str, any]]:
-    """
-    Main function to collect all Second Brain data.
-    
-    Args:
-        notion_api_key: Notion API key
-        notion_database_id: Specific database to collect from
-        max_crawl_pages: Maximum pages to crawl
-        include_web_crawling: Whether to crawl embedded links
-        
-    Returns:
-        Tuple of (documents, collection_stats)
-    """
-    collector = IntegratedDataCollector()
-    
-    documents = await collector.collect_all_data(
-        notion_api_key=notion_api_key,
-        notion_database_id=notion_database_id,
-        max_crawl_pages=max_crawl_pages
-    )
-    
-    stats = collector.get_collection_stats()
-    
-    return documents, stats
