@@ -115,16 +115,45 @@ def generate_embeddings(chunked_docs: List[Dict[str, Any]]) -> List[Dict[str, An
         processed_documents.append(processed_data)
     return processed_documents
 
-# Step 5: Store Data
+# Step 5a: Store to MongoDB
 @step
-def store_data(
+def store_to_mongodb(
     documents: List[Dict[str, Any]],
-    store_to_mongodb: bool = True,
-    save_local_backup: bool = True
+    should_store_to_mongodb: bool = True
 ) -> None:
-    """Step to store processed data"""
-    # Save local backup
-    if save_local_backup:
+    """Step to store processed data to MongoDB"""
+    if should_store_to_mongodb:
+        try:
+            vector_store = asyncio.run(create_vector_store(
+                initialize=True,
+                setup_indexes=True
+            ))
+            all_documents = []
+            all_chunks = []
+            for doc_data in documents:
+                document = doc_data["document"]
+                chunks = doc_data.get("chunks", [])
+                document.quality_score = doc_data.get("quality_score", 0.0)
+                document.processing_status = ProcessingStatus.COMPLETED
+                all_documents.append(document)
+                all_chunks.extend(chunks)
+            if all_documents and all_chunks:
+                asyncio.run(vector_store.store_documents_with_embeddings(
+                    documents=all_documents,
+                    chunks=all_chunks
+                ))
+            asyncio.run(vector_store.close())
+        except Exception:
+            pass
+
+# Step 5b: Save Local Backup
+@step
+def save_local_backup(
+    documents: List[Dict[str, Any]],
+    should_save_local_backup: bool = True
+) -> None:
+    """Step to save processed data as local backup"""
+    if should_save_local_backup:
         try:
             data_dir = settings.DATA_DIR / "processed"
             data_dir.mkdir(parents=True, exist_ok=True)
@@ -150,31 +179,6 @@ def store_data(
                 json.dump(backup_data, f, indent=2, ensure_ascii=False, default=str)
         except Exception:
             pass
-    
-    # Store to MongoDB
-    if store_to_mongodb:
-        try:
-            vector_store = asyncio.run(create_vector_store(
-                initialize=True,
-                setup_indexes=True
-            ))
-            all_documents = []
-            all_chunks = []
-            for doc_data in documents:
-                document = doc_data["document"]
-                chunks = doc_data.get("chunks", [])
-                document.quality_score = doc_data.get("quality_score", 0.0)
-                document.processing_status = ProcessingStatus.COMPLETED
-                all_documents.append(document)
-                all_chunks.extend(chunks)
-            if all_documents and all_chunks:
-                asyncio.run(vector_store.store_documents_with_embeddings(
-                    documents=all_documents,
-                    chunks=all_chunks
-                ))
-            asyncio.run(vector_store.close())
-        except Exception:
-            pass
 
 # Main Pipeline
 @pipeline
@@ -183,8 +187,8 @@ def etl_pipeline(
     notion_database_id: Optional[str] = None,
     max_crawl_pages: int = 1000,
     quality_threshold: float = 0.5,
-    store_to_mongodb: bool = True,
-    save_local_backup: bool = True
+    should_store_to_mongodb: bool = True,
+    should_save_local_backup: bool = True
 ):
     # Step 1: Collect Notion documents
     notion_docs, embedded_urls = collect_notion_documents(
@@ -199,25 +203,36 @@ def etl_pipeline(
     )
     
     # Step 3: Combine documents
-    all_docs = combine_documents(notion_docs, crawled_docs)
+    combined_docs = combine_documents(
+        notion_documents=notion_docs,
+        crawled_documents=crawled_docs
+    )
     
     # Step 4a: Clean content
-    cleaned_docs = clean_content(all_docs)
+    cleaned_docs = clean_content(documents=combined_docs)
     
     # Step 4b: Compute quality score
-    scored_docs = compute_quality_score(cleaned_docs, quality_threshold=quality_threshold)
+    scored_docs = compute_quality_score(
+        documents=cleaned_docs,
+        quality_threshold=quality_threshold
+    )
     
     # Step 4c: Chunk documents
-    chunked_docs = chunk_document(scored_docs)
+    chunked_docs = chunk_document(documents=scored_docs)
     
     # Step 4d: Generate embeddings
-    embedded_docs = generate_embeddings(chunked_docs)
+    processed_docs = generate_embeddings(chunked_docs=chunked_docs)
     
-    # Step 5: Store data
-    store_data(
-        documents=embedded_docs,
-        store_to_mongodb=store_to_mongodb,
-        save_local_backup=save_local_backup
+    # Step 5a: Store to MongoDB
+    store_to_mongodb(
+        documents=processed_docs,
+        should_store_to_mongodb=should_store_to_mongodb
+    )
+    
+    # Step 5b: Save local backup
+    save_local_backup(
+        documents=processed_docs,
+        should_save_local_backup=should_save_local_backup
     )
 
 if __name__ == "__main__":
