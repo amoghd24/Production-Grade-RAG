@@ -135,10 +135,15 @@ def store_to_mongodb(
     """Step to store processed data to MongoDB"""
     if should_store_to_mongodb:
         try:
-            vector_store = asyncio.run(create_vector_store(
+            # Create a new event loop for this step
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            
+            vector_store = loop.run_until_complete(create_vector_store(
                 initialize=True,
                 setup_indexes=True
             ))
+            
             all_documents = []
             all_chunks = []
             for doc_data in documents:
@@ -148,13 +153,18 @@ def store_to_mongodb(
                 document.processing_status = ProcessingStatus.COMPLETED
                 all_documents.append(document)
                 all_chunks.extend(chunks)
+                
             if all_documents and all_chunks:
-                asyncio.run(vector_store.store_documents_with_embeddings(
+                loop.run_until_complete(vector_store.store_documents_with_embeddings(
                     documents=all_documents,
                     chunks=all_chunks
                 ))
-            asyncio.run(vector_store.close())
-        except Exception:
+            
+            loop.run_until_complete(vector_store.close())
+            loop.close()
+            
+        except Exception as e:
+            print(f"Error storing to MongoDB: {str(e)}")
             pass
 
 # Step 5b: Save Local Backup

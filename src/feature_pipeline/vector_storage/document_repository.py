@@ -355,7 +355,7 @@ class MongoChunkRepository(IChunkRepository, LoggerMixin):
     
     async def insert_chunks(self, chunks: List[DocumentChunk]) -> List[str]:
         """
-        Insert multiple chunks.
+        Insert multiple chunks in batches to handle large insertions.
         
         Args:
             chunks: List of chunks to insert
@@ -372,17 +372,31 @@ class MongoChunkRepository(IChunkRepository, LoggerMixin):
         try:
             collection = self._get_collection()
             chunk_dicts = []
+            batch_size = 500  # Process in batches of 500
+            all_chunk_ids = []
             
             for chunk in chunks:
                 chunk_dict = self._chunk_to_dict(chunk)
                 chunk_dict.pop('id', None)
                 chunk_dicts.append(chunk_dict)
+                
+                # Process in batches
+                if len(chunk_dicts) >= batch_size:
+                    result = await collection.insert_many(chunk_dicts)
+                    batch_ids = [str(oid) for oid in result.inserted_ids]
+                    all_chunk_ids.extend(batch_ids)
+                    chunk_dicts = []  # Clear the batch
+                    self.logger.info(f"Inserted batch of {len(batch_ids)} chunks")
             
-            result = await collection.insert_many(chunk_dicts)
-            chunk_ids = [str(oid) for oid in result.inserted_ids]
+            # Insert any remaining chunks
+            if chunk_dicts:
+                result = await collection.insert_many(chunk_dicts)
+                batch_ids = [str(oid) for oid in result.inserted_ids]
+                all_chunk_ids.extend(batch_ids)
+                self.logger.info(f"Inserted final batch of {len(batch_ids)} chunks")
             
-            self.logger.info(f"Inserted {len(chunk_ids)} chunks")
-            return chunk_ids
+            self.logger.info(f"Total chunks inserted: {len(all_chunk_ids)}")
+            return all_chunk_ids
             
         except PyMongoError as e:
             self.logger.error(f"Failed to insert chunks: {str(e)}")
