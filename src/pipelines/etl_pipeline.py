@@ -47,11 +47,11 @@ def crawl_embedded_links(
 def combine_documents(
     notion_documents: List[Document],
     crawled_documents: List[Document]
-) -> Tuple[List[Document], Dict[str, any]]:
-    """Step to combine documents and generate statistics"""
+) -> List[Document]:
+    """Step to combine documents."""
     combiner = DocumentCombiner()
-    all_docs, stats = combiner.combine(notion_documents, crawled_documents)
-    return all_docs, stats
+    all_docs, _ = combiner.combine(notion_documents, crawled_documents)
+    return all_docs
 
 # Step 4: Process Documents
 @step
@@ -153,7 +153,7 @@ def etl_pipeline(
     )
     
     # Step 3: Combine documents
-    all_docs, stats = combine_documents(notion_docs, crawled_docs)
+    all_docs = combine_documents(notion_docs, crawled_docs)
     
     # Step 4: Process documents
     processed = process_documents(
