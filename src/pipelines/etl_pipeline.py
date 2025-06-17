@@ -1,9 +1,9 @@
 from zenml import pipeline, step
 from typing import List, Dict, Any, Optional, Set, Tuple
 from src.data_pipeline.integrated_collector import NotionDataCollector, WebDataCollector, DocumentCombiner
-from src.feature_pipeline.document_processor import DocumentProcessor
+from src.feature_pipeline.document_processor import ContentCleaner, QualityScorer, DocumentChunker, EmbeddingGenerator
 from src.feature_pipeline.vector_storage import create_vector_store
-from src.models.schemas import Document, ProcessingStatus
+from src.models.schemas import Document, DocumentChunk, ProcessingStatus
 from src.config.settings import settings
 import asyncio
 from datetime import datetime
@@ -53,20 +53,66 @@ def combine_documents(
     all_docs, _ = combiner.combine(notion_documents, crawled_documents)
     return all_docs
 
-# Step 4: Process Documents
+# Step 4a: Clean Content
 @step
-def process_documents(
-    documents: List[Document],
-    quality_threshold: float = 0.5
-) -> List[Dict[str, Any]]:
-    """Step to process documents"""
-    processor = DocumentProcessor()
+def clean_content(documents: List[Document]) -> List[Document]:
+    cleaner = ContentCleaner()
+    for doc in documents:
+        doc.content = cleaner.clean(doc.content)
+    return documents
+
+# Step 4b: Compute Quality Score
+@step
+def compute_quality_score(documents: List[Document], quality_threshold: float = 0.5) -> List[Document]:
+    scorer = QualityScorer()
+    filtered_docs = []
+    for doc in documents:
+        doc.quality_score = scorer.score(doc)
+        if doc.quality_score >= quality_threshold:
+            filtered_docs.append(doc)
+        else:
+            doc.processing_status = ProcessingStatus.COMPLETED
+    return filtered_docs
+
+# Step 4c: Chunk Documents
+@step
+def chunk_document(documents: List[Document]) -> List[Dict[str, Any]]:
+    chunker = DocumentChunker()
+    chunked = []
+    for doc in documents:
+        chunks = chunker.chunk(doc)
+        if not chunks:
+            doc.processing_status = ProcessingStatus.COMPLETED
+            continue
+        chunked.append({
+            "document": doc,
+            "chunks": chunks,
+            "quality_score": doc.quality_score
+        })
+    return chunked
+
+# Step 4d: Generate Embeddings
+@step
+def generate_embeddings(chunked_docs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    embedder = EmbeddingGenerator()
     processed_documents = []
-    for document in documents:
-        processed_data = asyncio.run(processor.process_document(document))
-        quality_score = processed_data.get("quality_score", 0.0)
-        if quality_score >= quality_threshold:
-            processed_documents.append(processed_data)
+    for doc_data in chunked_docs:
+        document = doc_data["document"]
+        chunks = doc_data["chunks"]
+        if not chunks:
+            document.processing_status = ProcessingStatus.COMPLETED
+            continue
+        chunks_with_embeddings = asyncio.run(embedder.generate(chunks))
+        document.processing_status = ProcessingStatus.COMPLETED
+        document.updated_at = datetime.utcnow()
+        processed_data = {
+            "document": document,
+            "chunks": chunks_with_embeddings,
+            "quality_score": doc_data["quality_score"],
+            "processed": True,
+            "chunk_count": len(chunks_with_embeddings)
+        }
+        processed_documents.append(processed_data)
     return processed_documents
 
 # Step 5: Store Data
@@ -155,15 +201,21 @@ def etl_pipeline(
     # Step 3: Combine documents
     all_docs = combine_documents(notion_docs, crawled_docs)
     
-    # Step 4: Process documents
-    processed = process_documents(
-        documents=all_docs,
-        quality_threshold=quality_threshold
-    )
+    # Step 4a: Clean content
+    cleaned_docs = clean_content(all_docs)
+    
+    # Step 4b: Compute quality score
+    scored_docs = compute_quality_score(cleaned_docs, quality_threshold=quality_threshold)
+    
+    # Step 4c: Chunk documents
+    chunked_docs = chunk_document(scored_docs)
+    
+    # Step 4d: Generate embeddings
+    embedded_docs = generate_embeddings(chunked_docs)
     
     # Step 5: Store data
     store_data(
-        documents=processed,
+        documents=embedded_docs,
         store_to_mongodb=store_to_mongodb,
         save_local_backup=save_local_backup
     )
