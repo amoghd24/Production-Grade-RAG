@@ -107,6 +107,7 @@ class MongoVectorStore(IVectorStore, LoggerMixin):
     ) -> Dict[str, Any]:
         """
         Store documents and their chunks with embeddings.
+        Implements retry logic for failed operations.
         
         Args:
             documents: List of documents to store
@@ -116,58 +117,68 @@ class MongoVectorStore(IVectorStore, LoggerMixin):
             Dictionary with storage results
             
         Raises:
-            VectorStorageException: If storage fails
+            VectorStorageException: If storage fails after retries
         """
         if not self._initialized:
             raise VectorStorageException("Vector store not initialized. Call initialize() first.")
         
-        try:
-            self.logger.info(f"Storing {len(documents)} documents and {len(chunks)} chunks")
-            
-            # Group chunks by document for validation
-            chunks_by_doc = {}
-            for chunk in chunks:
-                if chunk.document_id not in chunks_by_doc:
-                    chunks_by_doc[chunk.document_id] = []
-                chunks_by_doc[chunk.document_id].append(chunk)
-            
-            # Store documents first
-            document_ids = await self.document_repo.insert_documents(documents)
-            
-            # Update chunk document_ids if documents were assigned new IDs
-            if len(document_ids) == len(documents):
-                for i, (doc, doc_id) in enumerate(zip(documents, document_ids)):
-                    if doc.id != doc_id:  # Document got a new ID
-                        # Update chunks that reference this document
-                        old_doc_id = doc.id
-                        if old_doc_id in chunks_by_doc:
-                            for chunk in chunks_by_doc[old_doc_id]:
-                                chunk.document_id = doc_id
-            
-            # Store chunks with embeddings
-            chunk_ids = await self.chunk_repo.insert_chunks(chunks)
-            
-            # Update document processing status
-            for doc_id in document_ids:
-                await self.document_repo.update_document(
-                    doc_id, 
-                    {"processing_status": "completed"}
-                )
-            
-            result = {
-                "documents_stored": len(document_ids),
-                "chunks_stored": len(chunk_ids),
-                "document_ids": document_ids,
-                "chunk_ids": chunk_ids,
-                "timestamp": datetime.utcnow()
-            }
-            
-            self.logger.info(f"Successfully stored documents and chunks: {result}")
-            return result
-            
-        except Exception as e:
-            self.logger.error(f"Failed to store documents with embeddings: {str(e)}")
-            raise VectorStorageException(f"Document storage failed: {str(e)}") from e
+        max_retries = 3
+        retry_delay = 2  # seconds
+        
+        for attempt in range(max_retries):
+            try:
+                self.logger.info(f"Storing {len(documents)} documents and {len(chunks)} chunks (attempt {attempt + 1}/{max_retries})")
+                
+                # Group chunks by document for validation
+                chunks_by_doc = {}
+                for chunk in chunks:
+                    if chunk.document_id not in chunks_by_doc:
+                        chunks_by_doc[chunk.document_id] = []
+                    chunks_by_doc[chunk.document_id].append(chunk)
+                
+                # Store documents first
+                document_ids = await self.document_repo.insert_documents(documents)
+                
+                # Update chunk document_ids if documents were assigned new IDs
+                if len(document_ids) == len(documents):
+                    for i, (doc, doc_id) in enumerate(zip(documents, document_ids)):
+                        if doc.id != doc_id:  # Document got a new ID
+                            # Update chunks that reference this document
+                            old_doc_id = doc.id
+                            if old_doc_id in chunks_by_doc:
+                                for chunk in chunks_by_doc[old_doc_id]:
+                                    chunk.document_id = doc_id
+                
+                # Store chunks with embeddings
+                chunk_ids = await self.chunk_repo.insert_chunks(chunks)
+                
+                # Update document processing status
+                for doc_id in document_ids:
+                    await self.document_repo.update_document(
+                        doc_id, 
+                        {"processing_status": "completed"}
+                    )
+                
+                result = {
+                    "documents_stored": len(document_ids),
+                    "chunks_stored": len(chunk_ids),
+                    "document_ids": document_ids,
+                    "chunk_ids": chunk_ids,
+                    "timestamp": datetime.utcnow()
+                }
+                
+                self.logger.info(f"Successfully stored documents and chunks: {result}")
+                return result
+                
+            except Exception as e:
+                self.logger.error(f"Attempt {attempt + 1} failed: {str(e)}")
+                if attempt < max_retries - 1:
+                    self.logger.info(f"Retrying in {retry_delay} seconds...")
+                    await asyncio.sleep(retry_delay)
+                    retry_delay *= 2  # Exponential backoff
+                else:
+                    self.logger.error(f"All {max_retries} attempts failed")
+                    raise VectorStorageException(f"Document storage failed after {max_retries} attempts: {str(e)}") from e
     
     async def search(self, query: VectorSearchQuery) -> List[SearchResult]:
         """

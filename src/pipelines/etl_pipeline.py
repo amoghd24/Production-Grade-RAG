@@ -1,9 +1,9 @@
 from zenml import pipeline, step
 from typing import List, Dict, Any, Optional, Set, Tuple
 from src.data_pipeline.integrated_collector import NotionDataCollector, WebDataCollector, DocumentCombiner
-from src.feature_pipeline.document_processor import ContentCleaner, QualityScorer, DocumentChunker, EmbeddingGenerator
+from src.feature_pipeline.document_processor import ContentCleaner, QualityScorer, DocumentChunker, EmbeddingGenerator, MarkdownConverter
 from src.feature_pipeline.vector_storage import create_vector_store
-from src.models.schemas import Document, DocumentChunk, ProcessingStatus
+from src.models.schemas import Document, DocumentChunk, ProcessingStatus, ContentSource
 from src.config.settings import settings
 import asyncio
 from datetime import datetime
@@ -53,7 +53,18 @@ def combine_documents(
     all_docs, _ = combiner.combine(notion_documents, crawled_documents)
     return all_docs
 
-# Step 4a: Clean Content
+# Step 4a: Convert to Markdown
+@step
+def convert_to_markdown(documents: List[Document]) -> List[Document]:
+    """Step to convert HTML content to Markdown format."""
+    converter = MarkdownConverter()
+    for doc in documents:
+        if doc.source == ContentSource.WEB_CRAWL and doc.metadata.get("content_format") != "markdown":
+            doc.content = converter.convert(doc.content)
+            doc.metadata["content_format"] = "markdown"
+    return documents
+
+# Step 4b: Clean Content
 @step
 def clean_content(documents: List[Document]) -> List[Document]:
     cleaner = ContentCleaner()
@@ -61,7 +72,7 @@ def clean_content(documents: List[Document]) -> List[Document]:
         doc.content = cleaner.clean(doc.content)
     return documents
 
-# Step 4b: Compute Quality Score
+# Step 4c: Compute Quality Score
 @step
 def compute_quality_score(documents: List[Document], quality_threshold: float = 0.5) -> List[Document]:
     scorer = QualityScorer()
@@ -74,7 +85,7 @@ def compute_quality_score(documents: List[Document], quality_threshold: float = 
             doc.processing_status = ProcessingStatus.COMPLETED
     return filtered_docs
 
-# Step 4c: Chunk Documents
+# Step 4d: Chunk Documents
 @step
 def chunk_document(documents: List[Document]) -> List[Dict[str, Any]]:
     chunker = DocumentChunker()
@@ -91,7 +102,7 @@ def chunk_document(documents: List[Document]) -> List[Dict[str, Any]]:
         })
     return chunked
 
-# Step 4d: Generate Embeddings
+# Step 4e: Generate Embeddings
 @step
 def generate_embeddings(chunked_docs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     embedder = EmbeddingGenerator()
@@ -124,10 +135,15 @@ def store_to_mongodb(
     """Step to store processed data to MongoDB"""
     if should_store_to_mongodb:
         try:
-            vector_store = asyncio.run(create_vector_store(
+            # Create a new event loop for this step
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            
+            vector_store = loop.run_until_complete(create_vector_store(
                 initialize=True,
                 setup_indexes=True
             ))
+            
             all_documents = []
             all_chunks = []
             for doc_data in documents:
@@ -137,13 +153,18 @@ def store_to_mongodb(
                 document.processing_status = ProcessingStatus.COMPLETED
                 all_documents.append(document)
                 all_chunks.extend(chunks)
+                
             if all_documents and all_chunks:
-                asyncio.run(vector_store.store_documents_with_embeddings(
+                loop.run_until_complete(vector_store.store_documents_with_embeddings(
                     documents=all_documents,
                     chunks=all_chunks
                 ))
-            asyncio.run(vector_store.close())
-        except Exception:
+            
+            loop.run_until_complete(vector_store.close())
+            loop.close()
+            
+        except Exception as e:
+            print(f"Error storing to MongoDB: {str(e)}")
             pass
 
 # Step 5b: Save Local Backup
@@ -208,19 +229,22 @@ def etl_pipeline(
         crawled_documents=crawled_docs
     )
     
-    # Step 4a: Clean content
-    cleaned_docs = clean_content(documents=combined_docs)
+    # Step 4a: Convert to Markdown
+    markdown_docs = convert_to_markdown(documents=combined_docs)
     
-    # Step 4b: Compute quality score
+    # Step 4b: Clean content
+    cleaned_docs = clean_content(documents=markdown_docs)
+    
+    # Step 4c: Compute quality score
     scored_docs = compute_quality_score(
         documents=cleaned_docs,
         quality_threshold=quality_threshold
     )
     
-    # Step 4c: Chunk documents
+    # Step 4d: Chunk documents
     chunked_docs = chunk_document(documents=scored_docs)
     
-    # Step 4d: Generate embeddings
+    # Step 4e: Generate embeddings
     processed_docs = generate_embeddings(chunked_docs=chunked_docs)
     
     # Step 5a: Store to MongoDB

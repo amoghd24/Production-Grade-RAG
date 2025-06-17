@@ -10,6 +10,7 @@ from datetime import datetime
 
 from src.models.schemas import Document, ContentSource, DocumentType, ProcessingStatus
 from src.utils.logger import LoggerMixin
+from src.feature_pipeline.document_processor import MarkdownConverter
 
 @dataclass
 class BrowserConfig:
@@ -51,6 +52,7 @@ class AsyncWebCrawler(LoggerMixin):
         """Initialize the web crawler."""
         self.config = config or BrowserConfig()
         self._session = None
+        self.markdown_converter = MarkdownConverter()
     
     async def __aenter__(self):
         """Async context manager entry."""
@@ -104,30 +106,23 @@ class AsyncWebCrawler(LoggerMixin):
             # Get title
             title = soup.title.string if soup.title else url
             
-            # Get main content
-            # Remove script and style elements
-            for script in soup(["script", "style"]):
-                script.decompose()
-            
-            # Get text content
-            content = soup.get_text(separator='\n', strip=True)
-            
-            # Clean up content
-            content = '\n'.join(line.strip() for line in content.split('\n') if line.strip())
+            # Convert HTML to Markdown
+            markdown_content = self.markdown_converter.convert(str(soup))
             
             document = Document(
                 id=f"web_{datetime.utcnow().timestamp()}",
                 title=title,
-                content=content,
+                content=markdown_content,
                 source=ContentSource.WEB_CRAWL,
                 source_url=url,
                 document_type=DocumentType.WEB_PAGE,
                 processing_status=ProcessingStatus.COMPLETED,
                 metadata={
                     "crawled_at": datetime.utcnow().isoformat(),
-                    "url": url
+                    "url": url,
+                    "content_format": "markdown"
                 },
-                word_count=len(content.split())
+                word_count=len(markdown_content.split())
             )
             
             self.logger.info(f"Successfully crawled {url}")

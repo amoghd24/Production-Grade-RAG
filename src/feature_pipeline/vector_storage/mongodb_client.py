@@ -40,12 +40,15 @@ class MongoDBConnection(IDatabaseConnection, LoggerMixin):
         
         # Motor client options for production use
         self.client_options = {
-            "maxPoolSize": kwargs.get("max_pool_size", 10),
-            "minPoolSize": kwargs.get("min_pool_size", 1),
-            "maxIdleTimeMS": kwargs.get("max_idle_time_ms", 30000),
-            "serverSelectionTimeoutMS": kwargs.get("server_selection_timeout_ms", 5000),
-            "connectTimeoutMS": kwargs.get("connect_timeout_ms", 5000),
-            "socketTimeoutMS": kwargs.get("socket_timeout_ms", 5000),
+            "maxPoolSize": kwargs.get("max_pool_size", 50),
+            "minPoolSize": kwargs.get("min_pool_size", 5),
+            "maxIdleTimeMS": kwargs.get("max_idle_time_ms", 60000),
+            "serverSelectionTimeoutMS": kwargs.get("server_selection_timeout_ms", 30000),
+            "connectTimeoutMS": kwargs.get("connect_timeout_ms", 30000),
+            "socketTimeoutMS": kwargs.get("socket_timeout_ms", 30000),
+            "waitQueueTimeoutMS": kwargs.get("wait_queue_timeout_ms", 30000),
+            "retryWrites": True,
+            "retryReads": True,
             **kwargs
         }
         
