@@ -1,0 +1,61 @@
+# Advanced RAG Configuration
+# This file controls the behavior of the Advanced RAG system
+
+# Main strategy selection
+strategy: basic  # Options: basic, contextual, parent_retrieval, hybrid
+
+# Chunking configuration
+chunking:
+  strategy: basic  # Options: basic, contextual, parent_child, adaptive
+  chunk_size: 1000
+  chunk_overlap: 200
+  
+  # Parent-child chunking (only used when strategy is parent_child)
+  parent_chunk_size: 2000
+  child_chunk_size: 400
+  parent_overlap: 400
+  child_overlap: 100
+  
+  # Contextual enhancement (only used when strategy is contextual)
+  add_document_context: false
+  add_section_headers: false
+  context_template: null
+
+# Embedding configuration
+embedding:
+  primary_model: "sentence-transformers/all-MiniLM-L6-v2"
+  fallback_models: []
+  dimensions: 384
+  batch_size: 32
+  normalize_embeddings: true
+
+# Search configuration
+search:
+  primary_strategy: similarity  # Options: similarity, hybrid, contextual, parent_child
+  fallback_strategies: []
+  similarity_threshold: 0.7
+  max_results: 10
+  
+  # Hybrid search weights (must sum to 1.0)
+  vector_weight: 0.7
+  text_weight: 0.3
+  
+  # Reranking settings
+  enable_reranking: false
+  rerank_top_k: 20
+
+# Feature flags - controls which advanced features are enabled
+enable_contextual_retrieval: false
+enable_parent_retrieval: false
+enable_hybrid_search: false
+enable_quality_filtering: true
+
+# Performance settings
+max_concurrent_requests: 10
+request_timeout: 30
+cache_enabled: true
+cache_ttl: 3600  # 1 hour
+
+# Monitoring
+enable_metrics: true
+log_level: "INFO" 

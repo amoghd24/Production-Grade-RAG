@@ -70,6 +70,23 @@ class Settings(BaseSettings):
     COMET_PROJECT_NAME: str = Field(default="second-brain-ai", env="COMET_PROJECT_NAME")
     ZENML_STORE_URL: Optional[str] = Field(default=None, env="ZENML_STORE_URL")
     
+    # Advanced RAG Feature Flags
+    ENABLE_ADVANCED_RAG: bool = Field(default=False, env="ENABLE_ADVANCED_RAG")
+    RAG_STRATEGY: str = Field(default="basic", env="RAG_STRATEGY")
+    RAG_CONFIG_PATH: str = Field(default="config/rag_config.yaml", env="RAG_CONFIG_PATH")
+    
+    # Advanced RAG Features
+    ENABLE_CONTEXTUAL_CHUNKING: bool = Field(default=False, env="ENABLE_CONTEXTUAL_CHUNKING")
+    ENABLE_PARENT_RETRIEVAL: bool = Field(default=False, env="ENABLE_PARENT_RETRIEVAL")
+    ENABLE_HYBRID_SEARCH: bool = Field(default=False, env="ENABLE_HYBRID_SEARCH")
+    ENABLE_QUALITY_FILTERING: bool = Field(default=True, env="ENABLE_QUALITY_FILTERING")
+    
+    # Parent-Child Chunking Settings
+    PARENT_CHUNK_SIZE: int = Field(default=2000, env="PARENT_CHUNK_SIZE")
+    CHILD_CHUNK_SIZE: int = Field(default=400, env="CHILD_CHUNK_SIZE")
+    PARENT_CHUNK_OVERLAP: int = Field(default=400, env="PARENT_CHUNK_OVERLAP")
+    CHILD_CHUNK_OVERLAP: int = Field(default=100, env="CHILD_CHUNK_OVERLAP")
+    
     # Logging settings
     LOG_LEVEL: str = Field(default="INFO", env="LOG_LEVEL")
     LOG_FORMAT: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
