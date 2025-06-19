@@ -6,7 +6,7 @@ strategy: basic  # Options: basic, contextual, parent_retrieval, hybrid
 
 # Chunking configuration
 chunking:
-  strategy: basic  # Options: basic, contextual, parent_child, adaptive
+  strategy: contextual  # Options: basic, contextual, parent_child, adaptive
   chunk_size: 1000
   chunk_overlap: 200
   
@@ -17,8 +17,8 @@ chunking:
   child_overlap: 100
   
   # Contextual enhancement (only used when strategy is contextual)
-  add_document_context: false
-  add_section_headers: false
+  add_document_context: true
+  add_section_headers: true
   context_template: null
 
 # Embedding configuration
@@ -45,7 +45,7 @@ search:
   rerank_top_k: 20
 
 # Feature flags - controls which advanced features are enabled
-enable_contextual_retrieval: false
+enable_contextual_retrieval: true
 enable_parent_retrieval: false
 enable_hybrid_search: false
 enable_quality_filtering: true

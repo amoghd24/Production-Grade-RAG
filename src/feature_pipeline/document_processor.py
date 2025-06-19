@@ -90,6 +90,9 @@ class DocumentChunker(LoggerMixin):
             separators=["\n\n", "\n", " ", ""]
         )
         self.cleaner = ContentCleaner()
+        # Import here to avoid circular imports
+        from src.feature_pipeline.contextual_enhancer import ContextualEnhancer
+        self.contextual_enhancer = ContextualEnhancer()
     def chunk(self, document: Document) -> List[DocumentChunk]:
         if not document.content:
             return []
@@ -112,6 +115,10 @@ class DocumentChunker(LoggerMixin):
                 end_char=len(chunk_text)
             )
             chunks.append(chunk)
+        
+        # Apply contextual enhancement if enabled
+        chunks = self.contextual_enhancer.enhance_chunks(document, chunks)
+        
         self.logger.info(f"Created {len(chunks)} chunks for document '{document.title}'")
         return chunks
 
