@@ -97,37 +97,3 @@ Summary:"""
     def _run(self, content: str) -> str:
         """Sync wrapper - not implemented for async tool."""
         raise NotImplementedError("This tool only supports async operation")
-
-
-class WhatCanIDoTool(BaseTool, LoggerMixin):
-    """Tool that explains the assistant's capabilities."""
-    
-    name: str = "what_can_i_do"
-    description: str = """Use this tool when the user asks about your capabilities, features, or what you can help with.
-    No input required - just call this tool to get information about available features."""
-    
-    def _run(self, query: str = "") -> str:
-        """Explain the assistant's capabilities."""
-        return """I'm your Second Brain AI Assistant! Here's what I can help you with:
-
-🔍 **Knowledge Base Search**: I can search through your personal knowledge base to find relevant information, documents, and notes. Ask me questions about any content you've stored.
-
-📝 **Content Summarization**: I can summarize long documents, articles, or multiple pieces of content to help you quickly understand key points.
-
-💡 **Intelligent Assistance**: I can:
-- Answer questions based on your stored knowledge
-- Help you find connections between different pieces of information
-- Provide detailed explanations of concepts from your knowledge base
-- Combine information from multiple sources to give comprehensive answers
-
-🎯 **How to use me**:
-- Ask direct questions: "What did I learn about machine learning?"
-- Request summaries: "Summarize my notes on project management"
-- Seek explanations: "Explain the concept of RAG from my documents"
-- Find connections: "How do these topics relate to each other?"
-
-Just ask me anything about your knowledge base, and I'll help you find and understand the information!"""
-    
-    async def _arun(self, query: str = "") -> str:
-        """Async implementation - same as sync for this tool."""
-        return self._run(query) 

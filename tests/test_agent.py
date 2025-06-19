@@ -39,19 +39,16 @@ async def test_agent():
         
         # Test queries
         test_queries = [
-            "Which teams are playing in the Fifa Club World Cup 2025?",
-            "What are the high protein diets and their recipes?"
-            "List all the biggest ai companies"
+            "Tell me whatever you know about Real Madrid",
+            "Tell me whatever you know about Barcelona",
         ]
-        
         for i, query in enumerate(test_queries, 1):
             print(f"\n🤖 Test {i}: {query}")
             print("-" * 50)
             
             try:
                 result = await agent.process_query(query)
-                print(f"Response: {result['response']}")
-                print(f"Tools used: {result['tools_used']}")
+                print(f"Response: {result['response'][:100000]}")
                 
             except Exception as e:
                 print(f"❌ Error processing query: {str(e)}")

@@ -10,7 +10,7 @@ from langchain.agents import AgentExecutor, create_react_agent
 from langchain.prompts import PromptTemplate
 from langchain_openai import ChatOpenAI
 
-from src.inference_pipeline.tools import RetrieverTool, SummarizationTool, WhatCanIDoTool
+from src.inference_pipeline.tools import RetrieverTool, SummarizationTool
 from src.config.settings import settings
 from src.utils.logger import LoggerMixin
 
@@ -32,8 +32,7 @@ class SecondBrainAgent(LoggerMixin):
         # Initialize tools
         self.tools = [
             RetrieverTool(),
-            SummarizationTool(), 
-            WhatCanIDoTool()
+            SummarizationTool()
         ]
         
         # Create the agent
