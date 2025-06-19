@@ -141,27 +141,3 @@ class EmbeddingGenerator(LoggerMixin):
             chunk.embedding_model = self.model_name
         self.logger.info("Embeddings generated successfully")
         return chunks
-
-class MarkdownConverter(LoggerMixin):
-    """Converts HTML content to Markdown format."""
-    
-    def __init__(self):
-        try:
-            import html2text
-            self.converter = html2text.HTML2Text()
-            self.converter.ignore_links = False
-            self.converter.ignore_images = False
-            self.converter.ignore_emphasis = False
-            self.converter.body_width = 0  # No wrapping
-        except ImportError:
-            self.logger.error("html2text package not found. Please install it using: pip install html2text")
-            raise
-
-    def convert(self, html_content: str) -> str:
-        """Convert HTML content to Markdown format."""
-        try:
-            markdown_content = self.converter.handle(html_content)
-            return markdown_content.strip()
-        except Exception as e:
-            self.logger.error(f"Error converting HTML to Markdown: {str(e)}")
-            return html_content  # Return original content if conversion fails

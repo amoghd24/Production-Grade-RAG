@@ -1,7 +1,7 @@
 from zenml import pipeline, step
 from typing import List, Dict, Any, Optional, Set, Tuple
 from src.data_pipeline.integrated_collector import NotionDataCollector, WebDataCollector, DocumentCombiner
-from src.feature_pipeline.document_processor import ContentCleaner, QualityScorer, DocumentChunker, EmbeddingGenerator, MarkdownConverter
+from src.feature_pipeline.document_processor import ContentCleaner, QualityScorer, DocumentChunker, EmbeddingGenerator
 from src.feature_pipeline.vector_storage import create_vector_store
 from src.models.schemas import Document, DocumentChunk, ProcessingStatus, ContentSource
 from src.config.settings import settings
@@ -53,28 +53,10 @@ def combine_documents(
     all_docs, _ = combiner.combine(notion_documents, crawled_documents)
     return all_docs
 
-# Step 4a: Convert to Markdown
-@step
-def convert_to_markdown(documents: List[Document]) -> List[Document]:
-    """Step to convert HTML content to Markdown format."""
-    converter = MarkdownConverter()
-    for doc in documents:
-        if doc.source == ContentSource.WEB_CRAWL and doc.metadata.get("content_format") != "markdown":
-            doc.content = converter.convert(doc.content)
-            doc.metadata["content_format"] = "markdown"
-    return documents
-
-# Step 4b: Clean Content
-# @step
-# def clean_content(documents: List[Document]) -> List[Document]:
-#     cleaner = ContentCleaner()
-#     for doc in documents:
-#         doc.content = cleaner.clean(doc.content)
-#     return documents
-
-# Step 4c: Compute Quality Score
+# Step 4: Compute Quality Score
 @step
 def compute_quality_score(documents: List[Document]) -> List[Document]:
+    """Step to compute quality scores for documents."""
     scorer = QualityScorer()
     for doc in documents:
         doc.quality_score = scorer.score(doc)
@@ -82,7 +64,15 @@ def compute_quality_score(documents: List[Document]) -> List[Document]:
         doc.processing_status = ProcessingStatus.COMPLETED
     return documents
 
-# Step 4d: Chunk Documents
+# Step 4b: Clean Content (COMMENTED OUT - used in RAG pipeline)
+# @step
+# def clean_content(documents: List[Document]) -> List[Document]:
+#     cleaner = ContentCleaner()
+#     for doc in documents:
+#         doc.content = cleaner.clean(doc.content)
+#     return documents
+
+# Step 4d: Chunk Documents (COMMENTED OUT - used in RAG pipeline)
 # @step
 # def chunk_document(documents: List[Document]) -> List[Dict[str, Any]]:
 #     chunker = DocumentChunker()
@@ -99,7 +89,7 @@ def compute_quality_score(documents: List[Document]) -> List[Document]:
 #         })
 #     return chunked
 
-# Step 4e: Generate Embeddings
+# Step 4e: Generate Embeddings (COMMENTED OUT - used in RAG pipeline)
 # @step
 # def generate_embeddings(chunked_docs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 #     embedder = EmbeddingGenerator()
@@ -200,6 +190,13 @@ def etl_pipeline(
     should_store_to_mongodb: bool = True,
     should_save_local_backup: bool = True
 ):
+    """
+    ETL Pipeline for Second Brain AI Assistant.
+    
+    Collects documents from Notion, crawls embedded links, computes quality scores,
+    and stores enhanced documents to MongoDB. Documents are already in markdown format
+    from data collection, so no markdown conversion is needed.
+    """
     # Step 1: Collect Notion documents
     notion_docs, embedded_urls = collect_notion_documents(
         notion_api_key=notion_api_key,
@@ -218,32 +215,19 @@ def etl_pipeline(
         crawled_documents=crawled_docs
     )
     
-    # Step 4a: Convert to Markdown
-    markdown_docs = convert_to_markdown(documents=combined_docs)
-    
-    # Step 4b: Clean content (COMMENTED OUT)
-    # cleaned_docs = clean_content(documents=markdown_docs)
-    
-    # Step 4c: Compute quality score
-    scored_docs = compute_quality_score(
-        documents=markdown_docs  # Changed from cleaned_docs to markdown_docs
-    )
-    
-    # Step 4d: Chunk documents (COMMENTED OUT)
-    # chunked_docs = chunk_document(documents=scored_docs)
-    
-    # Step 4e: Generate embeddings (COMMENTED OUT)  
-    # processed_docs = generate_embeddings(chunked_docs=chunked_docs)
+    # Step 4: Compute quality score
+    # Note: Documents are already in markdown format from data collection
+    scored_docs = compute_quality_score(documents=combined_docs)
     
     # Step 5a: Store to MongoDB
     store_to_mongodb(
-        documents=scored_docs,  # Changed from processed_docs to scored_docs
+        documents=scored_docs,
         should_store_to_mongodb=should_store_to_mongodb
     )
     
     # Step 5b: Save local backup
     save_local_backup(
-        documents=scored_docs,  # Changed from processed_docs to scored_docs
+        documents=scored_docs,
         should_save_local_backup=should_save_local_backup
     )
 
