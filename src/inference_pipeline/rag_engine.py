@@ -54,10 +54,14 @@ class RAGEngine(LoggerMixin):
             )
             
             # Create RAG prompt with all relevant context
-            prompt = self.prompt_manager.create_rag_prompt(query, context_docs)
+            if context_docs:
+                prompt = self.prompt_manager.create_rag_prompt(query, context_docs)
+            else:
+                # No context found, use general query
+                prompt = f"I don't have specific information about '{query}' in my knowledge base. Please provide a general response or suggest how I can help."
             
             # Generate response
-            response = await self.openai_service.generate_response(
+            response = self.openai_service.generate_response(
                 prompt=prompt,
                 context=context_docs,
                 system_message=self.prompt_manager.get_system_message()
@@ -90,9 +94,18 @@ class RAGEngine(LoggerMixin):
             List of relevant context documents
         """
         try:
-            # Get all documents above similarity threshold
-            results = await self.vector_store.similarity_search(
-                query=query,
+            # First generate query embedding
+            from sentence_transformers import SentenceTransformer
+            from src.config.settings import settings
+            
+            # Load embedding model
+            embedding_model = SentenceTransformer(settings.EMBEDDING_MODEL)
+            query_embedding = embedding_model.encode([query])[0].tolist()
+            
+            # Get all documents above similarity threshold using vector search service
+            results = await self.vector_store.vector_search_service.similarity_search_with_score(
+                query_vector=query_embedding,
+                limit=10,
                 score_threshold=threshold
             )
             
@@ -100,29 +113,34 @@ class RAGEngine(LoggerMixin):
             context_docs = []
             total_tokens = 0
             
-            for doc in results:
+            for result in results:
                 # Calculate approximate tokens (rough estimate: 4 chars ≈ 1 token)
-                doc_tokens = len(doc.get("content", "")) // 4
+                doc_tokens = len(result.content) // 4
                 
                 # Skip if document would exceed token limit
                 if total_tokens + doc_tokens > self.max_total_tokens:
-                    self.logger.warning(f"Skipping document '{doc.get('title', '')}' due to token limit")
+                    self.logger.warning(f"Skipping document due to token limit")
                     continue
                 
                 # Truncate document if it's too long
-                content = doc.get("content", "")
+                content = result.content
                 if doc_tokens > self.max_tokens_per_doc:
                     content = content[:self.max_tokens_per_doc * 4] + "..."
                 
                 context_docs.append({
-                    "title": doc.get("title", ""),
+                    "title": result.metadata.get("document_id", "Document"),
                     "content": content,
-                    "score": doc.get("score", 0.0)
+                    "score": result.score
                 })
                 
                 total_tokens += doc_tokens
             
             self.logger.info(f"Retrieved {len(context_docs)} documents with {total_tokens} total tokens")
+            
+            # If no relevant documents found, return a helpful message
+            if not context_docs:
+                self.logger.info("No relevant documents found in knowledge base")
+            
             return context_docs
             
         except Exception as e:

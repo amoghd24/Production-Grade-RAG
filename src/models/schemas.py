@@ -97,13 +97,10 @@ class SearchQuery(BaseModel):
 
 class SearchResult(BaseModel):
     """Search result model."""
-    document_id: str
-    chunk_id: str
-    content: str
-    similarity_score: float = Field(..., ge=0.0, le=1.0)
-    document_title: str
-    source_url: Optional[str] = None
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    id: str = Field(..., description="Unique identifier for the result")
+    content: str = Field(..., description="Content of the search result")
+    score: float = Field(..., ge=0.0, le=1.0, description="Similarity score")
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
 
 
 class ChatMessage(BaseModel):

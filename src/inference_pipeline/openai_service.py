@@ -15,12 +15,12 @@ class OpenAIService(LoggerMixin):
     def __init__(self):
         """Initialize the OpenAI service."""
         self.client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
-        self.model = "gpt-4"  # Using GPT-4
-        self.max_input_tokens = 128000  # GPT-4's context window
+        self.model = "gpt-4o"  # Using GPT-4o (latest with 128K context)
+        self.max_input_tokens = 128000  # GPT-4o's context window
         self.max_output_tokens = 4096   # Maximum tokens for response
         self.temperature = 0.7
         
-    async def generate_response(
+    def generate_response(
         self,
         prompt: str,
         context: Optional[List[Dict[str, Any]]] = None,
@@ -77,8 +77,8 @@ class OpenAIService(LoggerMixin):
                 max_tokens or self.max_output_tokens
             )
             
-            # Generate response
-            response = await self.client.chat.completions.create(
+            # Generate response (OpenAI client is synchronous, don't await it)
+            response = self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
                 temperature=temperature or self.temperature,
