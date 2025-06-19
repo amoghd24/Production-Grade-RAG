@@ -1,6 +1,6 @@
 """
 Web crawler for the Second Brain AI Assistant.
-Implements async web crawling with proper context management and batch processing.
+Implements async web crawling using Crawl4AI for optimal LLM-friendly content extraction.
 """
 
 import asyncio
@@ -8,9 +8,9 @@ from typing import List, Optional, Dict, Any
 from dataclasses import dataclass
 from datetime import datetime
 
+from crawl4ai import AsyncWebCrawler as Crawl4aiCrawler
 from src.models.schemas import Document, ContentSource, DocumentType, ProcessingStatus
 from src.utils.logger import LoggerMixin
-from src.feature_pipeline.document_processor import MarkdownConverter
 
 @dataclass
 class BrowserConfig:
@@ -45,128 +45,139 @@ class MemoryAdaptiveDispatcher:
 
 class AsyncWebCrawler(LoggerMixin):
     """
-    Async web crawler with proper context management and batch processing support.
+    Async web crawler using Crawl4AI for LLM-optimized content extraction.
+    Maintains backward compatibility with the previous interface.
     """
     
     def __init__(self, config: Optional[BrowserConfig] = None):
         """Initialize the web crawler."""
         self.config = config or BrowserConfig()
-        self._session = None
-        self.markdown_converter = MarkdownConverter()
+        self._crawl4ai_crawler = None
     
     async def __aenter__(self):
         """Async context manager entry."""
-        self._session = await self._create_session()
+        self._crawl4ai_crawler = Crawl4aiCrawler(
+            headless=self.config.headless,
+            verbose=self.config.verbose
+        )
+        await self._crawl4ai_crawler.__aenter__()
         return self
     
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Async context manager exit."""
-        if self._session:
-            await self._session.close()
-            self._session = None
+        if self._crawl4ai_crawler:
+            await self._crawl4ai_crawler.__aexit__(exc_type, exc_val, exc_tb)
+            self._crawl4ai_crawler = None
     
-    async def _create_session(self):
-        """Create a new session for crawling."""
-        import aiohttp
-        
-        # Create session with timeout and retry settings
-        timeout = aiohttp.ClientTimeout(total=30)  # 30 seconds total timeout
-        connector = aiohttp.TCPConnector(
-            limit=10,  # Max concurrent connections
-            ttl_dns_cache=300,  # DNS cache TTL
-            ssl=False  # Disable SSL verification for testing
-        )
-        
-        return aiohttp.ClientSession(
-            timeout=timeout,
-            connector=connector,
-            headers={
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-            }
-        )
-    
-    async def crawl_url(self, url: str) -> Optional[Document]:
-        """Crawl a single URL."""
+    def _convert_to_document(self, crawl_result, original_url: str) -> Optional[Document]:
+        """Convert Crawl4AI result to our Document schema."""
         try:
-            self.logger.info(f"Crawling URL: {url}")
+            if not crawl_result.success:
+                self.logger.warning(f"Crawl failed for {original_url}: {crawl_result.error_message}")
+                return None
             
-            # Create a new session if none exists
-            if not self._session:
-                self._session = await self._create_session()
+            # Extract title from metadata or use a default
+            title = "Unknown Title"
+            if hasattr(crawl_result, 'metadata') and crawl_result.metadata:
+                title = crawl_result.metadata.get('title', title) or title
             
-            # Fetch the page content
-            async with self._session.get(url) as response:
-                response.raise_for_status()
-                html = await response.text()
+            # If no title in metadata, try to extract from markdown
+            if title == "Unknown Title" and crawl_result.markdown:
+                lines = crawl_result.markdown.split('\n')
+                for line in lines:
+                    if line.startswith('# '):
+                        title = line[2:].strip()
+                        if title:  # Make sure it's not empty
+                            break
             
-            # Extract title and content
-            from bs4 import BeautifulSoup
-            soup = BeautifulSoup(html, 'html.parser')
+            # Fallback to URL
+            if not title or title == "Unknown Title":
+                title = original_url
             
-            # Get title
-            title = soup.title.string if soup.title else url
+            # Ensure title is never None or empty
+            if not title:
+                title = f"Web Page - {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')}"
             
-            # Convert HTML to Markdown
-            markdown_content = self.markdown_converter.convert(str(soup))
+            # Use Crawl4AI's markdown output (optimized for LLMs)
+            content = crawl_result.markdown or ""
             
             document = Document(
                 id=f"web_{datetime.utcnow().timestamp()}",
                 title=title,
-                content=markdown_content,
+                content=content,
                 source=ContentSource.WEB_CRAWL,
-                source_url=url,
+                source_url=original_url,
                 document_type=DocumentType.WEB_PAGE,
                 processing_status=ProcessingStatus.COMPLETED,
                 metadata={
                     "crawled_at": datetime.utcnow().isoformat(),
-                    "url": url,
-                    "content_format": "markdown"
+                    "url": original_url,
+                    "content_format": "markdown",
+                    "status_code": getattr(crawl_result, 'status_code', None),
+                    "crawl4ai_metadata": getattr(crawl_result, 'metadata', {}),
+                    "links_found": len(getattr(crawl_result, 'links', {})),
+                    "images_found": len(getattr(crawl_result, 'media', {}))
                 },
-                word_count=len(markdown_content.split())
+                word_count=len(content.split()) if content else 0
             )
             
-            self.logger.info(f"Successfully crawled {url}")
+            return document
+            
+        except Exception as e:
+            self.logger.error(f"Error converting crawl result for {original_url}: {str(e)}")
+            return None
+
+    async def crawl_url(self, url: str) -> Optional[Document]:
+        """Crawl a single URL using Crawl4AI."""
+        try:
+            self.logger.info(f"Crawling URL with Crawl4AI: {url}")
+            
+            if not self._crawl4ai_crawler:
+                raise RuntimeError("Crawler not initialized. Use async context manager.")
+            
+            # Crawl with Crawl4AI
+            result = await self._crawl4ai_crawler.arun(url=url)
+            
+            # Convert to our Document format
+            document = self._convert_to_document(result, url)
+            
+            if document:
+                self.logger.info(f"✅ Successfully crawled {url} - {len(document.content)} chars")
+            else:
+                self.logger.error(f"❌ Failed to crawl {url}")
+            
             return document
             
         except Exception as e:
             self.logger.error(f"Error crawling {url}: {str(e)}")
             return None
-    
+
     async def crawl_urls(self, urls: List[str]) -> List[Document]:
-        """Crawl multiple URLs using batch processing."""
+        """Crawl multiple URLs using Crawl4AI batch processing."""
         try:
-            browser_config = BrowserConfig(
-                headless=self.config.headless,
-                verbose=self.config.verbose
-            )
+            if not urls:
+                return []
             
-            run_config = CrawlerRunConfig(
-                cache_mode="BYPASS",
-                stream=False
-            )
+            self.logger.info(f"🚀 Batch crawling {len(urls)} URLs with Crawl4AI")
             
-            dispatcher = MemoryAdaptiveDispatcher(
-                memory_threshold_percent=70.0,
-                check_interval=1.0,
-                max_session_permit=10,
-                monitor=CrawlerMonitor()
-            )
+            if not self._crawl4ai_crawler:
+                raise RuntimeError("Crawler not initialized. Use async context manager.")
             
-            async with AsyncWebCrawler(config=browser_config) as crawler:
-                results = await crawler.arun_many(
-                    urls=urls,
-                    config=run_config,
-                    dispatcher=dispatcher
-                )
-                
-                documents = []
-                for result in results:
-                    if result.success:
-                        doc = await crawler.crawl_url(result.url)
-                        if doc:
-                            documents.append(doc)
-                
-                return documents
+            documents = []
+            
+            # Crawl URLs sequentially for now (can optimize later with arun_many)
+            for url in urls:
+                try:
+                    result = await self._crawl4ai_crawler.arun(url=url)
+                    document = self._convert_to_document(result, url)
+                    if document:
+                        documents.append(document)
+                except Exception as e:
+                    self.logger.error(f"Failed to crawl {url}: {str(e)}")
+                    continue
+            
+            self.logger.info(f"✅ Successfully crawled {len(documents)}/{len(urls)} URLs")
+            return documents
                 
         except Exception as e:
             self.logger.error(f"Error in batch crawling: {str(e)}")
@@ -178,41 +189,23 @@ class AsyncWebCrawler(LoggerMixin):
         config: CrawlerRunConfig,
         dispatcher: MemoryAdaptiveDispatcher
     ) -> List[Any]:
-        """Run batch crawling with proper configuration."""
-        # Implement batch crawling logic here
-        # This is a placeholder implementation
+        """Run batch crawling - maintaining compatibility with old interface."""
+        documents = await self.crawl_urls(urls)
+        
+        # Convert to old format for compatibility
         results = []
-        for url in urls:
-            try:
-                doc = await self.crawl_url(url)
+        for i, url in enumerate(urls):
+            if i < len(documents) and documents[i]:
                 results.append({
                     "url": url,
-                    "success": doc is not None,
-                    "error_message": None if doc else "Failed to crawl"
+                    "success": True,
+                    "error_message": None
                 })
-            except Exception as e:
+            else:
                 results.append({
                     "url": url,
                     "success": False,
-                    "error_message": str(e)
+                    "error_message": "Failed to crawl"
                 })
+        
         return results
-
-class WebCrawler(LoggerMixin):
-    """
-    Synchronous wrapper around AsyncWebCrawler for backward compatibility.
-    """
-    
-    def __init__(self):
-        """Initialize the web crawler."""
-        self._crawler = AsyncWebCrawler()
-    
-    async def crawl_url(self, url: str) -> Optional[Document]:
-        """Crawl a single URL."""
-        async with self._crawler as crawler:
-            return await crawler.crawl_url(url)
-    
-    async def crawl_urls(self, urls: List[str]) -> List[Document]:
-        """Crawl multiple URLs."""
-        async with self._crawler as crawler:
-            return await crawler.crawl_urls(urls) 

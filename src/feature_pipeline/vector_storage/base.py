@@ -9,7 +9,7 @@ from typing import List, Dict, Optional, Any, AsyncContextManager
 from datetime import datetime
 from pydantic import BaseModel, Field
 
-from src.models.schemas import Document, DocumentChunk, SearchQuery, SearchResult
+from src.models.schemas import Document, DocumentChunk, SearchResult
 
 
 # Vector storage specific models

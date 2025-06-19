@@ -87,14 +87,6 @@ class DocumentChunk(BaseModel):
         }
 
 
-class SearchQuery(BaseModel):
-    """Search query model."""
-    query: str = Field(..., min_length=1, description="Search query text")
-    max_results: int = Field(default=10, ge=1, le=100, description="Maximum results to return")
-    similarity_threshold: float = Field(default=0.7, ge=0.0, le=1.0, description="Minimum similarity score")
-    filters: Optional[Dict[str, Any]] = Field(None, description="Additional filters")
-
-
 class SearchResult(BaseModel):
     """Search result model."""
     id: str = Field(..., description="Unique identifier for the result")
@@ -103,94 +95,4 @@ class SearchResult(BaseModel):
     metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
 
 
-class ChatMessage(BaseModel):
-    """Chat message model."""
-    id: Optional[str] = None
-    content: str = Field(..., min_length=1)
-    role: str = Field(..., description="user or assistant")
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
-    
-    # Context
-    sources: List[SearchResult] = Field(default_factory=list, description="Sources used for response")
-    metadata: Dict[str, Any] = Field(default_factory=dict)
-    
-    class Config:
-        json_encoders = {
-            datetime: lambda v: v.isoformat()
-        }
-
-
-class ChatSession(BaseModel):
-    """Chat session model."""
-    id: Optional[str] = None
-    title: str = Field(default="New Chat", description="Session title")
-    messages: List[ChatMessage] = Field(default_factory=list)
-    
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
-    
-    class Config:
-        json_encoders = {
-            datetime: lambda v: v.isoformat()
-        }
-
-
-class CrawlJob(BaseModel):
-    """Web crawling job model."""
-    id: Optional[str] = None
-    start_url: HttpUrl = Field(..., description="Starting URL for crawl")
-    max_pages: int = Field(default=10, ge=1, le=1000)
-    allowed_domains: List[str] = Field(default_factory=list)
-    
-    # Status
-    status: ProcessingStatus = Field(default=ProcessingStatus.PENDING)
-    pages_crawled: int = Field(default=0, ge=0)
-    pages_processed: int = Field(default=0, ge=0)
-    
-    # Timestamps
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
-    
-    # Results
-    crawled_urls: List[str] = Field(default_factory=list)
-    failed_urls: List[str] = Field(default_factory=list)
-    
-    class Config:
-        json_encoders = {
-            datetime: lambda v: v.isoformat()
-        }
-
-
-class ProcessingPipeline(BaseModel):
-    """Pipeline processing status model."""
-    id: Optional[str] = None
-    pipeline_type: str = Field(..., description="Type of pipeline (crawl, process, embed, etc.)")
-    status: ProcessingStatus = Field(default=ProcessingStatus.PENDING)
-    
-    # Progress tracking
-    total_items: int = Field(default=0, ge=0)
-    processed_items: int = Field(default=0, ge=0)
-    failed_items: int = Field(default=0, ge=0)
-    
-    # Timestamps
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
-    
-    # Configuration and logs
-    config: Dict[str, Any] = Field(default_factory=dict)
-    logs: List[str] = Field(default_factory=list)
-    error_message: Optional[str] = None
-    
-    @property
-    def progress_percentage(self) -> float:
-        """Calculate progress percentage."""
-        if self.total_items == 0:
-            return 0.0
-        return (self.processed_items / self.total_items) * 100
-    
-    class Config:
-        json_encoders = {
-            datetime: lambda v: v.isoformat()
-        } 
+ 

@@ -7,8 +7,8 @@ import asyncio
 from typing import List, Dict, Optional, Tuple, Set
 from datetime import datetime
 
-from src.data_pipeline.notion_collector import collect_notion_documents, NotionCollector
-from src.data_pipeline.web_crawler import WebCrawler, BrowserConfig, CrawlerRunConfig, MemoryAdaptiveDispatcher, AsyncWebCrawler
+from src.data_pipeline.notion_collector import collect_notion_documents
+from src.data_pipeline.web_crawler import BrowserConfig, CrawlerRunConfig, MemoryAdaptiveDispatcher, AsyncWebCrawler
 from src.models.schemas import Document, ProcessingStatus
 from src.utils.logger import LoggerMixin
 
