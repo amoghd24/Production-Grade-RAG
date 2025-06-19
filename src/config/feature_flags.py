@@ -113,6 +113,10 @@ class FeatureFlagManager(LoggerMixin):
         return (self.is_enabled(FeatureFlag.ADVANCED_RAG) and 
                 self.is_enabled(FeatureFlag.HYBRID_SEARCH))
     
+    def should_use_advanced_search(self) -> bool:
+        """Check if advanced search strategies should be used."""
+        return self.is_enabled(FeatureFlag.ADVANCED_RAG)
+    
     def get_chunking_config(self) -> Dict[str, Any]:
         """
         Get chunking configuration based on active flags.

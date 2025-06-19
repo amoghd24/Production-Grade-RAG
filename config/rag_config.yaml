@@ -31,14 +31,27 @@ embedding:
 
 # Search configuration
 search:
-  primary_strategy: similarity  # Options: similarity, hybrid, contextual, parent_child
-  fallback_strategies: []
+  primary_strategy: multi_strategy  # Options: similarity, hybrid, contextual, parent_child, multi_strategy
+  fallback_strategies: ["similarity", "contextual"]
   similarity_threshold: 0.7
   max_results: 10
+  
+  # Advanced search settings
+  enable_query_expansion: true
+  max_query_expansions: 3
+  enable_result_fusion: true
+  enable_diversity_filter: true
   
   # Hybrid search weights (must sum to 1.0)
   vector_weight: 0.7
   text_weight: 0.3
+  
+  # Strategy weights for result fusion
+  strategy_weights:
+    similarity: 0.6
+    contextual: 0.3
+    parent_child: 0.4
+    hybrid: 0.5
   
   # Reranking settings
   enable_reranking: false

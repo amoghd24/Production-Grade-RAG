@@ -34,6 +34,7 @@ class SearchStrategy(str, Enum):
     HYBRID = "hybrid"
     CONTEXTUAL = "contextual"
     PARENT_CHILD = "parent_child"
+    MULTI_STRATEGY = "multi_strategy"
 
 
 class ChunkingConfig(BaseModel):
