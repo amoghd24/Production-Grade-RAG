@@ -106,6 +106,7 @@ class RAGConfiguration(BaseModel):
     search: SearchConfig = Field(default_factory=SearchConfig)
     
     # Feature flags
+    enable_advanced_rag: bool = Field(default=False)
     enable_contextual_retrieval: bool = Field(default=False)
     enable_parent_retrieval: bool = Field(default=False)
     enable_hybrid_search: bool = Field(default=False)

@@ -77,6 +77,7 @@ class DocumentChunk(BaseModel):
     start_char: Optional[int] = Field(None, ge=0)
     end_char: Optional[int] = Field(None, ge=0)
     word_count: int = Field(..., ge=0)
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional chunk metadata")
     
     # Timestamps
     created_at: datetime = Field(default_factory=datetime.utcnow)

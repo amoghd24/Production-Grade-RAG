@@ -92,7 +92,9 @@ class DocumentChunker(LoggerMixin):
         self.cleaner = ContentCleaner()
         # Import here to avoid circular imports
         from src.feature_pipeline.contextual_enhancer import ContextualEnhancer
+        from src.feature_pipeline.parent_child_chunker import ParentChildChunker
         self.contextual_enhancer = ContextualEnhancer()
+        self.parent_child_chunker = ParentChildChunker()
     def chunk(self, document: Document) -> List[DocumentChunk]:
         if not document.content:
             return []
@@ -118,6 +120,9 @@ class DocumentChunker(LoggerMixin):
         
         # Apply contextual enhancement if enabled
         chunks = self.contextual_enhancer.enhance_chunks(document, chunks)
+        
+        # Apply parent-child hierarchy if enabled
+        chunks = self.parent_child_chunker.create_parent_child_chunks(document, chunks)
         
         self.logger.info(f"Created {len(chunks)} chunks for document '{document.title}'")
         return chunks

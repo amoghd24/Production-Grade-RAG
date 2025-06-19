@@ -50,6 +50,7 @@ class FeatureFlagManager(LoggerMixin):
                     self._rag_config = get_rag_config(settings.RAG_CONFIG_PATH)
                 
                 flags.update({
+                    FeatureFlag.ADVANCED_RAG: self._rag_config.enable_advanced_rag,
                     FeatureFlag.CONTEXTUAL_CHUNKING: self._rag_config.enable_contextual_retrieval,
                     FeatureFlag.PARENT_RETRIEVAL: self._rag_config.enable_parent_retrieval,
                     FeatureFlag.HYBRID_SEARCH: self._rag_config.enable_hybrid_search,
