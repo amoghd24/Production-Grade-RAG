@@ -65,12 +65,12 @@ def convert_to_markdown(documents: List[Document]) -> List[Document]:
     return documents
 
 # Step 4b: Clean Content
-@step
-def clean_content(documents: List[Document]) -> List[Document]:
-    cleaner = ContentCleaner()
-    for doc in documents:
-        doc.content = cleaner.clean(doc.content)
-    return documents
+# @step
+# def clean_content(documents: List[Document]) -> List[Document]:
+#     cleaner = ContentCleaner()
+#     for doc in documents:
+#         doc.content = cleaner.clean(doc.content)
+#     return documents
 
 # Step 4c: Compute Quality Score
 @step
@@ -86,50 +86,50 @@ def compute_quality_score(documents: List[Document], quality_threshold: float = 
     return filtered_docs
 
 # Step 4d: Chunk Documents
-@step
-def chunk_document(documents: List[Document]) -> List[Dict[str, Any]]:
-    chunker = DocumentChunker()
-    chunked = []
-    for doc in documents:
-        chunks = chunker.chunk(doc)
-        if not chunks:
-            doc.processing_status = ProcessingStatus.COMPLETED
-            continue
-        chunked.append({
-            "document": doc,
-            "chunks": chunks,
-            "quality_score": doc.quality_score
-        })
-    return chunked
+# @step
+# def chunk_document(documents: List[Document]) -> List[Dict[str, Any]]:
+#     chunker = DocumentChunker()
+#     chunked = []
+#     for doc in documents:
+#         chunks = chunker.chunk(doc)
+#         if not chunks:
+#             doc.processing_status = ProcessingStatus.COMPLETED
+#             continue
+#         chunked.append({
+#             "document": doc,
+#             "chunks": chunks,
+#             "quality_score": doc.quality_score
+#         })
+#     return chunked
 
 # Step 4e: Generate Embeddings
-@step
-def generate_embeddings(chunked_docs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    embedder = EmbeddingGenerator()
-    processed_documents = []
-    for doc_data in chunked_docs:
-        document = doc_data["document"]
-        chunks = doc_data["chunks"]
-        if not chunks:
-            document.processing_status = ProcessingStatus.COMPLETED
-            continue
-        chunks_with_embeddings = asyncio.run(embedder.generate(chunks))
-        document.processing_status = ProcessingStatus.COMPLETED
-        document.updated_at = datetime.utcnow()
-        processed_data = {
-            "document": document,
-            "chunks": chunks_with_embeddings,
-            "quality_score": doc_data["quality_score"],
-            "processed": True,
-            "chunk_count": len(chunks_with_embeddings)
-        }
-        processed_documents.append(processed_data)
-    return processed_documents
+# @step
+# def generate_embeddings(chunked_docs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+#     embedder = EmbeddingGenerator()
+#     processed_documents = []
+#     for doc_data in chunked_docs:
+#         document = doc_data["document"]
+#         chunks = doc_data["chunks"]
+#         if not chunks:
+#             document.processing_status = ProcessingStatus.COMPLETED
+#             continue
+#         chunks_with_embeddings = asyncio.run(embedder.generate(chunks))
+#         document.processing_status = ProcessingStatus.COMPLETED
+#         document.updated_at = datetime.utcnow()
+#         processed_data = {
+#             "document": document,
+#             "chunks": chunks_with_embeddings,
+#             "quality_score": doc_data["quality_score"],
+#             "processed": True,
+#             "chunk_count": len(chunks_with_embeddings)
+#         }
+#         processed_documents.append(processed_data)
+#     return processed_documents
 
 # Step 5a: Store to MongoDB
 @step
 def store_to_mongodb(
-    documents: List[Dict[str, Any]],
+    documents: List[Document],
     should_store_to_mongodb: bool = True
 ) -> None:
     """Step to store processed data to MongoDB"""
@@ -144,21 +144,17 @@ def store_to_mongodb(
                 setup_indexes=True
             ))
             
-            all_documents = []
-            all_chunks = []
-            for doc_data in documents:
-                document = doc_data["document"]
-                chunks = doc_data.get("chunks", [])
-                document.quality_score = doc_data.get("quality_score", 0.0)
+            # Update documents with completed status
+            for document in documents:
                 document.processing_status = ProcessingStatus.COMPLETED
-                all_documents.append(document)
-                all_chunks.extend(chunks)
+                document.updated_at = datetime.utcnow()
                 
-            if all_documents and all_chunks:
-                loop.run_until_complete(vector_store.store_documents_with_embeddings(
-                    documents=all_documents,
-                    chunks=all_chunks
-                ))
+            if documents:
+                # Store documents using document repository directly
+                document_ids = loop.run_until_complete(
+                    vector_store.document_repo.insert_documents(documents)
+                )
+                print(f"Successfully stored {len(document_ids)} documents to MongoDB")
             
             loop.run_until_complete(vector_store.close())
             loop.close()
@@ -170,7 +166,7 @@ def store_to_mongodb(
 # Step 5b: Save Local Backup
 @step
 def save_local_backup(
-    documents: List[Dict[str, Any]],
+    documents: List[Document],
     should_save_local_backup: bool = True
 ) -> None:
     """Step to save processed data as local backup"""
@@ -184,17 +180,14 @@ def save_local_backup(
                 "metadata": {
                     "backup_timestamp": datetime.utcnow().isoformat(),
                     "total_documents": len(documents),
-                    "total_chunks": sum(len(doc.get("chunks", [])) for doc in documents),
                 },
                 "documents": []
             }
-            for doc_data in documents:
-                doc_dict = doc_data["document"].dict() if hasattr(doc_data["document"], 'dict') else doc_data["document"]
-                chunks_dict = [chunk.dict() if hasattr(chunk, 'dict') else chunk for chunk in doc_data.get("chunks", [])]
+            for document in documents:
+                doc_dict = document.dict() if hasattr(document, 'dict') else document
                 backup_data["documents"].append({
                     "document": doc_dict,
-                    "chunks": chunks_dict,
-                    "quality_score": doc_data.get("quality_score", 0.0)
+                    "quality_score": getattr(document, 'quality_score', 0.0)
                 })
             with open(backup_file, 'w', encoding='utf-8') as f:
                 json.dump(backup_data, f, indent=2, ensure_ascii=False, default=str)
@@ -232,30 +225,30 @@ def etl_pipeline(
     # Step 4a: Convert to Markdown
     markdown_docs = convert_to_markdown(documents=combined_docs)
     
-    # Step 4b: Clean content
-    cleaned_docs = clean_content(documents=markdown_docs)
+    # Step 4b: Clean content (COMMENTED OUT)
+    # cleaned_docs = clean_content(documents=markdown_docs)
     
     # Step 4c: Compute quality score
     scored_docs = compute_quality_score(
-        documents=cleaned_docs,
+        documents=markdown_docs,  # Changed from cleaned_docs to markdown_docs
         quality_threshold=quality_threshold
     )
     
-    # Step 4d: Chunk documents
-    chunked_docs = chunk_document(documents=scored_docs)
+    # Step 4d: Chunk documents (COMMENTED OUT)
+    # chunked_docs = chunk_document(documents=scored_docs)
     
-    # Step 4e: Generate embeddings
-    processed_docs = generate_embeddings(chunked_docs=chunked_docs)
+    # Step 4e: Generate embeddings (COMMENTED OUT)  
+    # processed_docs = generate_embeddings(chunked_docs=chunked_docs)
     
     # Step 5a: Store to MongoDB
     store_to_mongodb(
-        documents=processed_docs,
+        documents=scored_docs,  # Changed from processed_docs to scored_docs
         should_store_to_mongodb=should_store_to_mongodb
     )
     
     # Step 5b: Save local backup
     save_local_backup(
-        documents=processed_docs,
+        documents=scored_docs,  # Changed from processed_docs to scored_docs
         should_save_local_backup=should_save_local_backup
     )
 
