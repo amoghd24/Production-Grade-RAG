@@ -48,8 +48,8 @@ class Settings(BaseSettings):
     # LLM settings
     OPENAI_API_KEY: Optional[str] = Field(default=None, env="OPENAI_API_KEY")
     HUGGINGFACE_API_TOKEN: Optional[str] = Field(default=None, env="HUGGINGFACE_API_TOKEN")
-    LLM_MODEL: str = Field(default="gpt-3.5-turbo", env="LLM_MODEL")
-    MAX_TOKENS: int = Field(default=2000, env="MAX_TOKENS")
+    LLM_MODEL: str = Field(default="gpt-4o", env="LLM_MODEL")
+    MAX_TOKENS: int = Field(default=4096, env="MAX_TOKENS")
     TEMPERATURE: float = Field(default=0.1, env="TEMPERATURE")
     
     # Notion API settings (for data collection) - Following DecodingML naming
