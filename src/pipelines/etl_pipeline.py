@@ -74,16 +74,13 @@ def convert_to_markdown(documents: List[Document]) -> List[Document]:
 
 # Step 4c: Compute Quality Score
 @step
-def compute_quality_score(documents: List[Document], quality_threshold: float = 0.5) -> List[Document]:
+def compute_quality_score(documents: List[Document]) -> List[Document]:
     scorer = QualityScorer()
-    filtered_docs = []
     for doc in documents:
         doc.quality_score = scorer.score(doc)
-        if doc.quality_score >= quality_threshold:
-            filtered_docs.append(doc)
-        else:
-            doc.processing_status = ProcessingStatus.COMPLETED
-    return filtered_docs
+        # Keep all documents - filtering will happen in RAG pipeline
+        doc.processing_status = ProcessingStatus.COMPLETED
+    return documents
 
 # Step 4d: Chunk Documents
 # @step
@@ -200,7 +197,6 @@ def etl_pipeline(
     notion_api_key: Optional[str] = None,
     notion_database_id: Optional[str] = None,
     max_crawl_pages: int = 1000,
-    quality_threshold: float = 0.5,
     should_store_to_mongodb: bool = True,
     should_save_local_backup: bool = True
 ):
@@ -230,8 +226,7 @@ def etl_pipeline(
     
     # Step 4c: Compute quality score
     scored_docs = compute_quality_score(
-        documents=markdown_docs,  # Changed from cleaned_docs to markdown_docs
-        quality_threshold=quality_threshold
+        documents=markdown_docs  # Changed from cleaned_docs to markdown_docs
     )
     
     # Step 4d: Chunk documents (COMMENTED OUT)
