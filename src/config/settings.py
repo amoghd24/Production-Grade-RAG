@@ -57,6 +57,11 @@ class Settings(BaseSettings):
     NOTION_API_KEY: Optional[str] = Field(default=None, env="NOTION_API_KEY")  # Fallback
     NOTION_DATABASE_ID: Optional[str] = Field(default=None, env="NOTION_DATABASE_ID")
     
+    # Slack Integration settings
+    SLACK_BOT_TOKEN: Optional[str] = Field(default=None, env="SLACK_BOT_TOKEN")
+    SLACK_SIGNING_SECRET: Optional[str] = Field(default=None, env="SLACK_SIGNING_SECRET")
+    SLACK_APP_TOKEN: Optional[str] = Field(default=None, env="SLACK_APP_TOKEN")
+    
     # Crawling settings
     MAX_CRAWL_PAGES: int = Field(default=100, env="MAX_CRAWL_PAGES")
     CRAWL_DELAY: float = Field(default=1.0, env="CRAWL_DELAY")

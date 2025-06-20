@@ -37,6 +37,9 @@ class HealthResponse(BaseModel):
     details: Optional[Dict[str, Any]] = Field(None, description="Additional health details")
 
 
+
+
+
 # FastAPI Application
 class SecondBrainAPI(LoggerMixin):
     """FastAPI application for Second Brain AI Assistant."""
@@ -54,7 +57,8 @@ class SecondBrainAPI(LoggerMixin):
         # Initialize agent
         self.agent: Optional[SecondBrainAgent] = None
         self._setup_routes()
-        
+    
+
     def _setup_routes(self):
         """Set up API routes."""
         
@@ -171,6 +175,7 @@ class SecondBrainAPI(LoggerMixin):
                     detail=f"Failed to get capabilities: {str(e)}"
                 )
         
+
         @self.app.get("/")
         async def root():
             """Root endpoint with API information."""
@@ -185,7 +190,7 @@ class SecondBrainAPI(LoggerMixin):
                     "docs": "/docs"
                 }
             }
-
+    
 
 # Create the application instance
 def create_app() -> FastAPI:
