@@ -39,9 +39,8 @@ async def test_agent():
         
         # Test queries
         test_queries = [
-            "Give me information about Real Madrid. also provide the source of the information, url",
-            "Give me information about Barcelona. also provide the source of the information, url",
-
+            "Give me information about FC Barcelona",
+            "Give me info about openai"
         ]
         for i, query in enumerate(test_queries, 1):
             print(f"\n🤖 Test {i}: {query}")
