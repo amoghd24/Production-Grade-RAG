@@ -45,10 +45,11 @@ class SearchContext:
 class AdvancedSearchOrchestrator(LoggerMixin):
     """Orchestrates multiple search strategies and fuses results."""
     
-    def __init__(self):
+    def __init__(self, vector_store=None):
         """Initialize the advanced search orchestrator."""
         self.feature_flags = get_feature_flags()
         self.query_expander = QueryExpansionService()
+        self.vector_store = vector_store
         
         # Default search strategy configurations
         self.search_configs = {
@@ -72,7 +73,7 @@ class AdvancedSearchOrchestrator(LoggerMixin):
             ),
         }
     
-    def search(self, query: str, max_results: int = 10, **kwargs) -> List[SearchResult]:
+    async def search(self, query: str, max_results: int = 10, **kwargs) -> List[SearchResult]:
         """
         Execute advanced search using multiple strategies.
         
@@ -84,15 +85,15 @@ class AdvancedSearchOrchestrator(LoggerMixin):
         Returns:
             List of fused and ranked search results
         """
-        if not self.feature_flags.should_use_advanced_search():
-            # Fallback to basic search
-            return self._basic_search(query, max_results)
+        if not self.feature_flags.should_use_advanced_search() or not self.vector_store:
+            # Fallback to empty results if no vector store
+            return []
         
         # Prepare search context
         context = self._prepare_search_context(query)
         
         # Execute multiple search strategies
-        strategy_results = self._execute_search_strategies(context, max_results)
+        strategy_results = await self._execute_search_strategies(context, max_results)
         
         # Fuse results from different strategies
         fused_results = self._fuse_results(strategy_results, max_results)
@@ -133,7 +134,7 @@ class AdvancedSearchOrchestrator(LoggerMixin):
         self.logger.debug(f"Search context prepared: intent={intent}, expansions={len(expanded_queries)}")
         return context
     
-    def _execute_search_strategies(self, context: SearchContext, max_results: int) -> Dict[SearchStrategy, List[SearchResult]]:
+    async def _execute_search_strategies(self, context: SearchContext, max_results: int) -> Dict[SearchStrategy, List[SearchResult]]:
         """Execute multiple search strategies based on query context."""
         strategy_results = {}
         
@@ -146,7 +147,7 @@ class AdvancedSearchOrchestrator(LoggerMixin):
             
             try:
                 # Execute each strategy (this would call actual search implementations)
-                results = self._execute_single_strategy(strategy, context, max_results)
+                results = await self._execute_single_strategy(strategy, context, max_results)
                 strategy_results[strategy] = results
                 
                 self.logger.debug(f"Strategy {strategy} returned {len(results)} results")
@@ -195,21 +196,22 @@ class AdvancedSearchOrchestrator(LoggerMixin):
         
         return True
     
-    def _execute_single_strategy(self, strategy: SearchStrategy, context: SearchContext, max_results: int) -> List[SearchResult]:
-        """Execute a single search strategy."""
-        # This is a placeholder - in a real implementation, this would call
-        # the actual search backends (vector stores, text search, etc.)
-        
+    async def _execute_single_strategy(self, strategy: SearchStrategy, context: SearchContext, max_results: int) -> List[SearchResult]:
+        """Execute a single search strategy using real vector store."""
         results = []
         config = self.search_configs[strategy]
         
-        # Simulate different search strategies
-        if strategy == SearchStrategy.SIMILARITY:
-            results = self._mock_similarity_search(context, config.max_results)
-        elif strategy == SearchStrategy.CONTEXTUAL:
-            results = self._mock_contextual_search(context, config.max_results)
-        elif strategy == SearchStrategy.PARENT_CHILD:
-            results = self._mock_parent_child_search(context, config.max_results)
+        try:
+            # Use real vector store search instead of mocks
+            if strategy == SearchStrategy.SIMILARITY:
+                results = await self._real_similarity_search(context, config.max_results)
+            elif strategy == SearchStrategy.CONTEXTUAL:
+                results = await self._real_contextual_search(context, config.max_results)
+            elif strategy == SearchStrategy.PARENT_CHILD:
+                results = await self._real_parent_child_search(context, config.max_results)
+        except Exception as e:
+            self.logger.error(f"Strategy {strategy} failed: {str(e)}")
+            results = []
         
         # Filter by threshold
         filtered_results = [r for r in results if r.score >= config.threshold]
@@ -301,46 +303,91 @@ class AdvancedSearchOrchestrator(LoggerMixin):
         
         return len(intersection) / len(union)
     
-    def _basic_search(self, query: str, max_results: int) -> List[SearchResult]:
-        """Fallback basic search when advanced features are disabled."""
-        # Placeholder for basic search
-        return []
-    
-    def _mock_similarity_search(self, context: SearchContext, max_results: int) -> List[SearchResult]:
-        """Mock similarity search for demonstration."""
-        return [
-            SearchResult(
-                id=f"sim_{i}",
-                content=f"Similarity result {i} for '{context.query}'",
-                score=0.9 - i * 0.1,
-                metadata={"strategy": "similarity", "query": context.query}
+    async def _real_similarity_search(self, context: SearchContext, max_results: int) -> List[SearchResult]:
+        """Real similarity search using vector store."""
+        if not self.vector_store:
+            return []
+        
+        try:
+            # Generate embedding for the query
+            from sentence_transformers import SentenceTransformer
+            from src.config.settings import settings
+            
+            embedding_model = SentenceTransformer(settings.EMBEDDING_MODEL)
+            query_embedding = embedding_model.encode([context.query])[0].tolist()
+            
+            # Perform similarity search
+            results = await self.vector_store.vector_search_service.similarity_search(
+                query_vector=query_embedding,
+                limit=max_results,
+                filters=None
             )
-            for i in range(min(3, max_results))
-        ]
+            
+            return results
+        except Exception as e:
+            self.logger.error(f"Real similarity search failed: {str(e)}")
+            return []
     
-    def _mock_contextual_search(self, context: SearchContext, max_results: int) -> List[SearchResult]:
-        """Mock contextual search for demonstration."""
-        return [
-            SearchResult(
-                id=f"ctx_{i}",
-                content=f"Contextual result {i} for '{context.query}'",
-                score=0.85 - i * 0.1,
-                metadata={"strategy": "contextual", "query": context.query}
-            )
-            for i in range(min(2, max_results))
-        ]
+    async def _real_contextual_search(self, context: SearchContext, max_results: int) -> List[SearchResult]:
+        """Real contextual search using expanded queries."""
+        if not self.vector_store:
+            return []
+        
+        try:
+            # Use expanded queries for contextual search
+            all_results = []
+            
+            for expanded_query in context.expanded_queries:
+                from sentence_transformers import SentenceTransformer
+                from src.config.settings import settings
+                
+                embedding_model = SentenceTransformer(settings.EMBEDDING_MODEL)
+                query_embedding = embedding_model.encode([expanded_query])[0].tolist()
+                
+                results = await self.vector_store.vector_search_service.similarity_search(
+                    query_vector=query_embedding,
+                    limit=max_results // len(context.expanded_queries) + 1,
+                    filters=None
+                )
+                all_results.extend(results)
+            
+            # Remove duplicates and limit results
+            seen_ids = set()
+            unique_results = []
+            for result in all_results:
+                if result.id not in seen_ids:
+                    seen_ids.add(result.id)
+                    unique_results.append(result)
+            
+            return unique_results[:max_results]
+        except Exception as e:
+            self.logger.error(f"Real contextual search failed: {str(e)}")
+            return []
     
-    def _mock_parent_child_search(self, context: SearchContext, max_results: int) -> List[SearchResult]:
-        """Mock parent-child search for demonstration."""
-        return [
-            SearchResult(
-                id=f"pc_{i}",
-                content=f"Parent-child result {i} for '{context.query}'",
-                score=0.8 - i * 0.1,
-                metadata={"strategy": "parent_child", "query": context.query}
+    async def _real_parent_child_search(self, context: SearchContext, max_results: int) -> List[SearchResult]:
+        """Real parent-child search with higher score threshold."""
+        if not self.vector_store:
+            return []
+        
+        try:
+            from sentence_transformers import SentenceTransformer
+            from src.config.settings import settings
+            
+            embedding_model = SentenceTransformer(settings.EMBEDDING_MODEL)
+            query_embedding = embedding_model.encode([context.query])[0].tolist()
+            
+            # Use filtered search with higher threshold for parent-child
+            results = await self.vector_store.vector_search_service.similarity_search_with_score(
+                query_vector=query_embedding,
+                limit=max_results,
+                score_threshold=0.75,  # Higher threshold for parent-child
+                filters=None
             )
-            for i in range(min(2, max_results))
-        ]
+            
+            return results
+        except Exception as e:
+            self.logger.error(f"Real parent-child search failed: {str(e)}")
+            return []
     
     def get_search_statistics(self) -> Dict[str, Any]:
         """Get search performance statistics."""

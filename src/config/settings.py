@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     
     # Database settings (MongoDB)
     MONGODB_URL: str = Field(default="mongodb+srv://<username>:<password>@<cluster>.mongodb.net/?retryWrites=true&w=majority", env="MONGODB_URL")
-    DATABASE_NAME: str = Field(default="second_brain", env="DATABASE_NAME")
+    DATABASE_NAME: str = Field(default="second-brain", env="DATABASE_NAME")
     COLLECTION_NAME: str = Field(default="knowledge_base", env="COLLECTION_NAME")
     
     # MongoDB Atlas Vector Search settings

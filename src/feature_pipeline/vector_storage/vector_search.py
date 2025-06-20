@@ -432,6 +432,31 @@ class MongoVectorSearch(IVectorSearch, LoggerMixin):
             SearchError: If search fails
         """
         try:
+            # Check if vector search index is ready before performing search
+            if hasattr(self.connection, 'get_database'):
+                try:
+                    database = self.connection.get_database()
+                    result = await database.command("listSearchIndexes", self.collection_name)
+                    indexes = result.get("cursor", {}).get("firstBatch", [])
+                    
+                    vector_index_ready = False
+                    for idx in indexes:
+                        if idx.get("name") == self.default_index:
+                            status = idx.get("status", "unknown").upper()
+                            if status in ["READY", "ACTIVE"]:
+                                vector_index_ready = True
+                                break
+                            else:
+                                self.logger.warning(f"Vector index '{self.default_index}' not ready (status: {status})")
+                    
+                    if not vector_index_ready:
+                        self.logger.warning(f"Vector index '{self.default_index}' not ready for search")
+                        return []  # Return empty results instead of failing
+                        
+                except Exception as index_check_error:
+                    self.logger.debug(f"Could not check index status: {index_check_error}")
+                    # Continue with search attempt
+            
             collection = self._get_collection()
             strategy = self.strategies["similarity"]
             
