@@ -77,6 +77,7 @@ class DocumentChunk(BaseModel):
     start_char: Optional[int] = Field(None, ge=0)
     end_char: Optional[int] = Field(None, ge=0)
     word_count: int = Field(..., ge=0)
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional chunk metadata")
     
     # Timestamps
     created_at: datetime = Field(default_factory=datetime.utcnow)
@@ -87,12 +88,52 @@ class DocumentChunk(BaseModel):
         }
 
 
+class SourceAttribution(BaseModel):
+    """Rich source attribution information for search results."""
+    title: str = Field(..., description="Document title")
+    url: Optional[HttpUrl] = Field(None, description="Source URL if available")
+    source_type: ContentSource = Field(..., description="Type of source")
+    document_type: DocumentType = Field(..., description="Type of document")
+    chunk_type: Optional[str] = Field(None, description="Type of chunk (parent/child)")
+    strategies_used: List[str] = Field(default_factory=list, description="Search strategies that found this")
+    created_at: Optional[datetime] = Field(None, description="When source was created")
+    
+    class Config:
+        json_encoders = {
+            datetime: lambda v: v.isoformat()
+        }
+
+
 class SearchResult(BaseModel):
-    """Search result model."""
+    """Enhanced search result model with rich source attribution."""
     id: str = Field(..., description="Unique identifier for the result")
     content: str = Field(..., description="Content of the search result")
     score: float = Field(..., ge=0.0, le=1.0, description="Similarity score")
+    
+    # Enhanced source attribution
+    source: Optional[SourceAttribution] = Field(None, description="Rich source information")
+    
+    # Legacy metadata for backward compatibility
     metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
+
+
+class QueryResponse(BaseModel):
+    """Enhanced response model for user queries with source attribution."""
+    response: str = Field(..., description="Generated response")
+    sources: List[SourceAttribution] = Field(default_factory=list, description="Source attribution")
+    confidence_score: Optional[float] = Field(None, ge=0.0, le=1.0, description="Confidence in response")
+    processing_time_ms: Optional[float] = Field(None, description="Processing time")
+    search_strategy: Optional[str] = Field(None, description="Search strategy used")
+    
+    # Metadata
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    model_used: Optional[str] = Field(None, description="AI model used for generation")
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
+    
+    class Config:
+        json_encoders = {
+            datetime: lambda v: v.isoformat()
+        }
 
 
  

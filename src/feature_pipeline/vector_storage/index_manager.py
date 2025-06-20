@@ -266,43 +266,36 @@ class MongoIndexManager(IIndexManager, LoggerMixin):
             True if index exists, False otherwise
         """
         try:
+            database = self.connection.get_database()
+            
+            # Try to check search indexes first
+            try:
+                result = await database.command("listSearchIndexes", collection_name)
+                search_indexes = result.get("cursor", {}).get("firstBatch", [])
+                
+                for idx in search_indexes:
+                    if idx.get("name") == index_name:
+                        self.logger.info(f"Search index '{index_name}' exists")
+                        return True
+                        
+            except Exception as search_error:
+                self.logger.debug(f"Search index check failed: {search_error}")
+                # Fall back to regular index check
+                pass
+            
+            # Fallback: Check regular indexes
             indexes = await self.list_indexes(collection_name)
-            return any(idx.get("name") == index_name for idx in indexes)
+            found = any(idx.get("name") == index_name for idx in indexes)
+            
+            if found:
+                self.logger.info(f"Regular index '{index_name}' exists")
+            
+            return found
             
         except Exception as e:
             self.logger.warning(f"Failed to check index existence: {str(e)}")
             return False
-    
-    async def get_index_status(self, collection_name: str, index_name: str) -> Optional[Dict[str, Any]]:
-        """
-        Get the status of a specific index.
-        
-        Args:
-            collection_name: Name of the collection
-            index_name: Name of the index
-            
-        Returns:
-            Index status information or None if not found
-        """
-        try:
-            indexes = await self.list_indexes(collection_name)
-            
-            for index in indexes:
-                if index.get("name") == index_name:
-                    return {
-                        "name": index.get("name"),
-                        "status": index.get("status", "unknown"),
-                        "definition": index.get("definition", {}),
-                        "created_at": index.get("createdAt"),
-                        "updated_at": index.get("updatedAt")
-                    }
-            
-            return None
-            
-        except Exception as e:
-            self.logger.error(f"Failed to get index status: {str(e)}")
-            return None
-    
+
     async def ensure_vector_index(
         self,
         collection_name: str,
@@ -312,7 +305,7 @@ class MongoIndexManager(IIndexManager, LoggerMixin):
         similarity_metric: str = "cosine"
     ) -> bool:
         """
-        Ensure a vector index exists, create if it doesn't.
+        Ensure a vector index exists and is ready for use.
         
         Args:
             collection_name: Name of the collection
@@ -330,8 +323,9 @@ class MongoIndexManager(IIndexManager, LoggerMixin):
                 self.logger.info(f"Vector index '{index_name}' already exists")
                 return True
             
-            # Create the index
-            return await self.create_vector_index(
+            # Index doesn't exist, create it
+            self.logger.info(f"Vector index '{index_name}' not found, creating...")
+            success = await self.create_vector_index(
                 collection_name=collection_name,
                 index_name=index_name,
                 vector_field=vector_field,
@@ -339,10 +333,15 @@ class MongoIndexManager(IIndexManager, LoggerMixin):
                 similarity_metric=similarity_metric
             )
             
+            if success:
+                self.logger.info(f"Vector index '{index_name}' created successfully. Note: Index may take time to become active.")
+            
+            return success
+            
         except Exception as e:
             self.logger.error(f"Failed to ensure vector index: {str(e)}")
             return False
-    
+
     async def setup_default_indexes(
         self,
         documents_collection: str = "documents",

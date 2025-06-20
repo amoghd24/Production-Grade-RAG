@@ -83,11 +83,7 @@ class LoggerMixin:
         """Get logger for this class."""
         if not hasattr(self, '_logger'):
             class_name = self.__class__.__name__
-            log_file = f"{class_name.lower()}.log"
-            self._logger = get_logger(
-                f"{self.__class__.__module__}.{class_name}",
-                log_file=log_file
-            )
+            self._logger = get_logger(f"{self.__class__.__module__}.{class_name}")
         return self._logger
 
 

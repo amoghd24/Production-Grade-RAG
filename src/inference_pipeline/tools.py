@@ -32,19 +32,40 @@ class RetrieverTool(BaseTool, LoggerMixin):
             if self.rag_engine.vector_store is None:
                 await self.rag_engine.setup()
             
-            # Process the query
+            # Process the query - now returns QueryResponse object
             result = await self.rag_engine.process_query(query)
             
-            # Format the response with sources
-            response = result["response"]
-            context_docs = result.get("context_docs", [])
+            # Extract response from QueryResponse object
+            response = result.response
             
-            if context_docs:
-                sources = "\n".join([
-                    f"- {doc.get('title', 'Unknown')} (Relevance: {doc.get('score', 0.0):.2f})"
-                    for doc in context_docs[:3]  # Show top 3 sources
-                ])
-                response += f"\n\nSources:\n{sources}"
+            # Format sources from the new structure with URLs prominently displayed
+            if result.sources:
+                sources_with_urls = []
+                for source in result.sources[:3]:  # Show top 3 sources
+                    source_line = f"- **{source.title}**"
+                    
+                    # Add source type and document type
+                    if hasattr(source, 'source_type') and hasattr(source, 'document_type'):
+                        source_line += f" [{source.source_type.value}/{source.document_type.value}]"
+                    
+                    # Add URL prominently if available
+                    if source.url:
+                        source_line += f"\n  🔗 {str(source.url)}"
+                    
+                    # Add search strategies used
+                    if hasattr(source, 'strategies_used') and source.strategies_used:
+                        strategies = ", ".join(source.strategies_used)
+                        source_line += f"\n  📊 Found via: {strategies}"
+                    
+                    sources_with_urls.append(source_line)
+                
+                # Add confidence score if available
+                confidence_info = f" (Confidence: {result.confidence_score:.2f})" if result.confidence_score else ""
+                
+                # Add search strategy used
+                strategy_info = f" via {result.search_strategy}" if result.search_strategy else ""
+                
+                response += f"\n\n📚 **Sources{confidence_info}{strategy_info}:**\n" + "\n\n".join(sources_with_urls)
             
             return response
             

@@ -306,84 +306,22 @@ class MongoVectorSearch(IVectorSearch, LoggerMixin):
             "filtered": FilteredSearchStrategy()
         }
     
-    async def _check_atlas_features(self) -> bool:
-        """
-        Check if the MongoDB instance supports Atlas Vector Search.
-        
-        Returns:
-            True if Atlas features are available, False otherwise
-        """
-        try:
-            # Method 1: Check connection string (most reliable)
-            conn_str = getattr(self.connection, 'connection_string', '')
-            if "mongodb+srv://" in conn_str and "mongodb.net" in conn_str:
-                self.logger.info("Atlas connection detected via connection string")
-                return True
-            
-            # Method 2: Check buildInfo for Atlas indicators
-            db = self.connection.get_database()
-            server_info = await db.command("buildInfo")
-            
-            # Check for Atlas-specific indicators
-            if "atlasVersion" in server_info:
-                self.logger.info("Atlas connection detected via atlasVersion")
-                return True
-            
-            # Check for enterprise modules (Atlas indicator)
-            modules = server_info.get("modules", [])
-            if "enterprise" in modules and "mongodb+srv" in conn_str:
-                self.logger.info("Atlas connection detected via enterprise modules")
-                return True
-            
-            # Method 3: Try to test vector search index creation
-            try:
-                # Try to check if vector search indexes can be listed
-                # This is an Atlas-specific command
-                await db.command({"listSearchIndexes": "test_collection"})
-                self.logger.info("Atlas connection detected via search index capability")
-                return True
-            except Exception as index_e:
-                # listSearchIndexes command fails on local MongoDB
-                if "command not found" not in str(index_e).lower():
-                    # If it's not "command not found", it might be Atlas
-                    self.logger.info("Atlas connection detected via search index response")
-                    return True
-            
-            # If none of the Atlas indicators are present
-            version = server_info.get("version", "")
-            self.logger.warning(f"Local MongoDB detected (version: {version})")
-            self.logger.warning("Atlas Vector Search requires MongoDB Atlas cloud service")
-            return False
-            
-        except Exception as e:
-            self.logger.error(f"Error checking Atlas features: {e}")
-            return False
-    
     async def _debug_vector_search_error(self, error: Exception) -> str:
         """
-        Provide detailed debugging information for vector search errors.
+        Provide basic debugging information for vector search errors.
         
         Args:
             error: The exception that occurred
             
         Returns:
-            Debugging message with solutions
+            Simple error message
         """
         error_str = str(error).lower()
         
         if "vectorsearch" in error_str or "unknown operator" in error_str:
-            return (
-                "❌ VECTOR SEARCH ERROR DETECTED\n"
-                "🔍 CAUSE: $vectorSearch operator not supported\n"
-                "📍 SOLUTION OPTIONS:\n"
-                "   1. Switch to MongoDB Atlas (recommended for course)\n"
-                "   2. Use local fallback with basic similarity search\n"
-                "   3. Set up Atlas cluster: https://www.mongodb.com/atlas\n"
-                f"   4. Current connection: {self.connection.connection_string}\n"
-                "⚠️  Local MongoDB doesn't support Atlas Vector Search features"
-            )
+            return "Vector search operator not supported - ensure MongoDB Atlas is configured"
         
-        return f"Unexpected vector search error: {error}"
+        return str(error)
     
     def _get_collection(self):
         """Get the chunks collection."""
