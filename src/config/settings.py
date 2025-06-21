@@ -78,7 +78,7 @@ class Settings(BaseSettings):
     # Advanced RAG Feature Flags
     ENABLE_ADVANCED_RAG: bool = Field(default=False, env="ENABLE_ADVANCED_RAG")
     RAG_STRATEGY: str = Field(default="basic", env="RAG_STRATEGY")
-    RAG_CONFIG_PATH: str = Field(default="config/rag_config.yaml", env="RAG_CONFIG_PATH")
+    RAG_CONFIG_PATH: str = Field(default="config/rag.yaml", env="RAG_CONFIG_PATH")
     
     # Advanced RAG Features
     ENABLE_CONTEXTUAL_CHUNKING: bool = Field(default=False, env="ENABLE_CONTEXTUAL_CHUNKING")
