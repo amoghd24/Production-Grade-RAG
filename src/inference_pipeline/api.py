@@ -5,36 +5,18 @@ Provides REST API endpoints for the agentic system.
 
 from typing import Dict, Any, Optional
 from fastapi import FastAPI, HTTPException, BackgroundTasks
-from pydantic import BaseModel, Field
 import asyncio
 from datetime import datetime
 
 from src.inference_pipeline.agent import SecondBrainAgent, create_second_brain_agent
 from src.utils.logger import LoggerMixin
-
-
-# Request/Response Models
-class QueryRequest(BaseModel):
-    """Request model for agent queries."""
-    query: str = Field(..., min_length=1, max_length=1000, description="User query")
-    include_metadata: bool = Field(default=False, description="Include processing metadata")
-
-
-class QueryResponse(BaseModel):
-    """Response model for agent queries."""
-    response: str = Field(..., description="Agent's response")
-    tools_used: list = Field(default_factory=list, description="Tools used by agent")
-    processing_time_ms: Optional[float] = Field(None, description="Processing time in milliseconds")
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
-    metadata: Optional[Dict[str, Any]] = Field(None, description="Additional metadata")
-
-
-class HealthResponse(BaseModel):
-    """Health check response model."""
-    status: str = Field(..., description="Service status")
-    agent_ready: bool = Field(..., description="Agent readiness status")
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
-    details: Optional[Dict[str, Any]] = Field(None, description="Additional health details")
+from src.models.agent import (
+    QueryRequest,
+    QueryResponse,
+    HealthResponse,
+    CapabilitiesResponse,
+    APIInfoResponse
+)
 
 
 
@@ -150,7 +132,7 @@ class SecondBrainAPI(LoggerMixin):
                     detail=f"Query processing failed: {str(e)}"
                 )
         
-        @self.app.get("/capabilities")
+        @self.app.get("/capabilities", response_model=CapabilitiesResponse)
         async def get_capabilities():
             """Get agent capabilities."""
             if self.agent is None:
@@ -162,11 +144,11 @@ class SecondBrainAPI(LoggerMixin):
             try:
                 # Use the agent to get its capabilities
                 result = await self.agent.process_query("What can you do?")
-                return {
-                    "capabilities": result["response"],
-                    "tools_available": [tool.name for tool in self.agent.tools],
-                    "agent_type": "react"
-                }
+                return CapabilitiesResponse(
+                    capabilities=result["response"],
+                    tools_available=[tool.name for tool in self.agent.tools],
+                    agent_type="react"
+                )
                 
             except Exception as e:
                 self.logger.error(f"Failed to get capabilities: {str(e)}")
@@ -176,20 +158,20 @@ class SecondBrainAPI(LoggerMixin):
                 )
         
 
-        @self.app.get("/")
+        @self.app.get("/", response_model=APIInfoResponse)
         async def root():
             """Root endpoint with API information."""
-            return {
-                "name": "Second Brain AI Assistant",
-                "version": "1.0.0",
-                "description": "Intelligent assistant for your personal knowledge base",
-                "endpoints": {
+            return APIInfoResponse(
+                name="Second Brain AI Assistant",
+                version="1.0.0",
+                description="Intelligent assistant for your personal knowledge base",
+                endpoints={
                     "health": "/health",
                     "query": "/query",
                     "capabilities": "/capabilities",
                     "docs": "/docs"
                 }
-            }
+            )
     
 
 # Create the application instance
