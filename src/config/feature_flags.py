@@ -6,7 +6,8 @@ Provides runtime control over experimental features.
 from typing import Dict, Any, Optional
 from enum import Enum
 from src.config.settings import settings
-from src.config.rag_config import get_rag_config, RAGStrategy
+from src.config.rag_config import get_rag_config
+from src.models.rag import RAGStrategy
 from src.utils.logger import LoggerMixin
 
 

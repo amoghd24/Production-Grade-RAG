@@ -9,16 +9,18 @@ from pathlib import Path
 from unittest.mock import patch, MagicMock
 
 from src.config.rag_config import (
-    RAGConfiguration,
     RAGConfigManager,
+    get_rag_config_manager,
+    get_rag_config
+)
+from src.models.rag import (
+    RAGConfiguration,
     ChunkingConfig,
     EmbeddingConfig,
     SearchConfig,
     RAGStrategy,
     ChunkingStrategy,
-    SearchStrategy,
-    get_rag_config_manager,
-    get_rag_config
+    SearchStrategy
 )
 from src.config.feature_flags import (
     FeatureFlagManager,

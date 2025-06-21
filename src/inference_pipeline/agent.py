@@ -67,7 +67,7 @@ Key Guidelines:
 3. Be helpful and explain your reasoning process
 4. If you can't find information, be honest about limitations
 5. Always cite sources when providing information from the knowledge base
-
+6. Always provide the source of the information, url
 Question: {input}
 Thought: {agent_scratchpad}"""
         )
