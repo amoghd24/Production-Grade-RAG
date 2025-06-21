@@ -13,8 +13,9 @@ from src.utils.logger import LoggerMixin
 from .base import (
     IVectorStore, IDatabaseConnection, IDocumentRepository, 
     IChunkRepository, IVectorSearch, IIndexManager,
-    VectorStorageException, VectorSearchQuery
+    VectorStorageException
 )
+from src.models.rag import VectorSearchQuery
 from .mongodb_client import MongoDBConnection, MongoDBConnectionFactory
 from .document_repository import create_document_repository, create_chunk_repository
 from .vector_search import create_vector_search

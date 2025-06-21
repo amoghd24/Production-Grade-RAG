@@ -9,6 +9,9 @@ from .config_models import (
     SearchConfig,
     RAGConfiguration
 )
+from .search_models import (
+    VectorSearchQuery
+)
 
 __all__ = [
     "RAGStrategy",
@@ -17,5 +20,6 @@ __all__ = [
     "ChunkingConfig",
     "EmbeddingConfig",
     "SearchConfig",
-    "RAGConfiguration"
+    "RAGConfiguration",
+    "VectorSearchQuery"
 ] 
