@@ -112,15 +112,3 @@ def create_session_log_file() -> str:
 
 # Default application logger
 app_logger = get_logger("second_brain", "app.log")
-
-
-if __name__ == "__main__":
-    # Test logging setup
-    test_logger = get_logger(__name__, "test.log")
-    
-    test_logger.debug("This is a debug message")
-    test_logger.info("This is an info message")
-    test_logger.warning("This is a warning message")
-    test_logger.error("This is an error message")
-    
-    print("✅ Logging test completed. Check logs directory.") 
