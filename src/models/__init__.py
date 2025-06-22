@@ -3,3 +3,4 @@
 from .schemas import *
 from .rag import *
 from .agent import *
+from .WebCrawler import *

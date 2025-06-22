@@ -5,24 +5,12 @@ Implements async web crawling using Crawl4AI for optimal LLM-friendly content ex
 
 import asyncio
 from typing import List, Optional, Dict, Any
-from dataclasses import dataclass
 from datetime import datetime
 
 from crawl4ai import AsyncWebCrawler as Crawl4aiCrawler
 from src.models.schemas import Document, ContentSource, DocumentType, ProcessingStatus
+from src.models.WebCrawler import BrowserConfig, CrawlerRunConfig
 from src.utils.logger import LoggerMixin
-
-@dataclass
-class BrowserConfig:
-    """Browser configuration for web crawling."""
-    headless: bool = True
-    verbose: bool = False
-
-@dataclass
-class CrawlerRunConfig:
-    """Configuration for crawler runs."""
-    cache_mode: str = "BYPASS"
-    stream: bool = False
 
 class CrawlerMonitor:
     """Monitor for crawler operations."""
