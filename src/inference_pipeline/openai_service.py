@@ -18,7 +18,7 @@ class OpenAIService(LoggerMixin):
         self.model = "gpt-4o"  # Using GPT-4o (latest with 128K context)
         self.max_input_tokens = 128000  # GPT-4o's context window
         self.max_output_tokens = 4096   # Maximum tokens for response
-        self.temperature = 0.7
+        self.temperature = 0.0
         
     def generate_response(
         self,

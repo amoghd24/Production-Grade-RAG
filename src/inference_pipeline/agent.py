@@ -8,8 +8,10 @@ import asyncio
 
 from langgraph.prebuilt import create_react_agent
 from langchain_openai import ChatOpenAI
+from langchain_core.messages import SystemMessage
 
 from src.inference_pipeline.tools import RetrieverTool, SummarizationTool
+from src.inference_pipeline.prompt_manager import PromptManager
 from src.config.settings import settings
 from src.utils.logger import LoggerMixin
 
@@ -23,10 +25,13 @@ class SecondBrainAgent(LoggerMixin):
     def __init__(self):
         """Initialize the agent with tools and LLM."""
         self.llm = ChatOpenAI(
-            model="gpt-4o",
-            temperature=0.1,
+            model="gpt-4.1",
+            temperature=0.0,
             api_key=settings.OPENAI_API_KEY
         )
+        
+        # Initialize prompt manager
+        self.prompt_manager = PromptManager()
         
         # Initialize tools
         self.tools = [
@@ -34,10 +39,24 @@ class SecondBrainAgent(LoggerMixin):
             SummarizationTool()
         ]
         
-        # Create LangGraph ReAct agent
+        # Create system prompt for knowledge base restriction
+        system_prompt = """You are a Second Brain AI Assistant with access to the user's personal knowledge base.
+
+CRITICAL INSTRUCTIONS:
+- You must ONLY provide information that exists in the knowledge base accessible through your tools
+- NEVER make up, invent, or predict information that is not in the knowledge base  
+- If information is not available in the knowledge base, clearly state that you don't have that information
+- Always use your retrieval tools to search the knowledge base before answering
+- When you find relevant information, cite your sources clearly
+- If the knowledge base doesn't contain enough information to answer a question, say so explicitly
+
+Your role is to help users find and understand information from their second brain, not to provide general knowledge or make predictions."""
+        
+        # Create LangGraph ReAct agent with system prompt
         self.agent_executor = create_react_agent(
             self.llm,
             self.tools,
+            state_modifier=lambda state: [SystemMessage(content=system_prompt)] + state["messages"],
             interrupt_before=None,
             interrupt_after=None,
             checkpointer=None
