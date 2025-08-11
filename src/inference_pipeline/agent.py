@@ -6,8 +6,7 @@ Integrates RAG capabilities with intelligent tool selection.
 from typing import Dict, Any, List, Optional
 import asyncio
 
-from langchain.agents import AgentExecutor, create_react_agent
-from langchain.prompts import PromptTemplate
+from langgraph.prebuilt import create_react_agent
 from langchain_openai import ChatOpenAI
 
 from src.inference_pipeline.tools import RetrieverTool, SummarizationTool
@@ -18,14 +17,14 @@ from src.utils.logger import LoggerMixin
 class SecondBrainAgent(LoggerMixin):
     """
     Main agent class that orchestrates tool usage for the Second Brain AI Assistant.
-    Uses Langchain's ReAct agent framework for reasoning and acting.
+    Uses LangGraph's ReAct agent for reliable execution.
     """
     
     def __init__(self):
         """Initialize the agent with tools and LLM."""
         self.llm = ChatOpenAI(
-            model="gpt-4o",  # Latest GPT-4o with 128K context
-            temperature=0.1,  # Low temperature for consistent reasoning
+            model="gpt-4o",
+            temperature=0.1,
             api_key=settings.OPENAI_API_KEY
         )
         
@@ -35,66 +34,18 @@ class SecondBrainAgent(LoggerMixin):
             SummarizationTool()
         ]
         
-        # Create the agent
-        self.agent_executor = None
-        self._setup_agent()
-    
-    def _setup_agent(self):
-        """Set up the ReAct agent with custom prompt."""
-        
-        # Custom prompt template for Second Brain AI Assistant
-        react_prompt = PromptTemplate(
-            input_variables=["tools", "tool_names", "input", "agent_scratchpad"],
-            template="""You are the Second Brain AI Assistant, designed to help users access and understand their personal knowledge base.
-
-You have access to the following tools:
-{tools}
-
-Use the following format EXACTLY:
-
-Question: the input question you must answer
-Thought: you should always think about what to do
-Action: the action to take, should be one of [{tool_names}]
-Action Input: the input to the action
-Observation: the result of the action
-... (this Thought/Action/Action Input/Observation can repeat N times)
-Thought: I now know the final answer
-Final Answer: the final answer to the original input question
-
-Key Guidelines:
-1. Always search the knowledge base first when asked about specific information
-2. Use summarization when dealing with long content or multiple sources  
-3. Be helpful and explain your reasoning process
-4. If you can't find information, be honest about limitations
-5. Always cite sources when providing information from the knowledge base
-6. IMPORTANT: Once you have a good answer from the knowledge base search, provide the Final Answer immediately. Do not continue searching unless the first result is insufficient.
-7. Keep responses concise and focused on the user's question.
-
-Question: {input}
-Thought: {agent_scratchpad}"""
-        )
-        
-        # Create the ReAct agent
-        agent = create_react_agent(
-            llm=self.llm,
-            tools=self.tools,
-            prompt=react_prompt
-        )
-        
-        # Create agent executor
-        self.agent_executor = AgentExecutor(
-            agent=agent,
-            tools=self.tools,
-            verbose=True,  # Enable verbose output for debugging
-            max_iterations=5,  # Reduced from 20 to prevent long execution times
-            handle_parsing_errors=True,
-            max_execution_time=30,  # Add 30-second timeout
-            early_stopping_method="force"  # Use default force method
+        # Create LangGraph ReAct agent
+        self.agent_executor = create_react_agent(
+            self.llm,
+            self.tools,
+            interrupt_before=None,
+            interrupt_after=None,
+            checkpointer=None
         )
     
     async def process_query(self, query: str) -> Dict[str, Any]:
         """
-        Process a user query using the ReAct agent.
+        Process a user query using the LangGraph ReAct agent.
         
         Args:
             query: User's input query
@@ -105,14 +56,20 @@ Thought: {agent_scratchpad}"""
         try:
             self.logger.info(f"Processing query: {query}")
             
-            # Execute the agent
-            result = await self.agent_executor.ainvoke({"input": query})
+            # Execute the LangGraph agent
+            result = await self.agent_executor.ainvoke(
+                {"messages": [("user", query)]},
+                config={"configurable": {"thread_id": "1"}}
+            )
+            
+            # Extract the final message
+            final_message = result["messages"][-1]
             
             response = {
-                "response": result["output"],
-                "intermediate_steps": result.get("intermediate_steps", []),
-                "agent_type": "react",
-                "tools_used": self._extract_tools_used(result.get("intermediate_steps", []))
+                "response": final_message.content,
+                "intermediate_steps": [],  # LangGraph handles this differently
+                "agent_type": "langgraph_react",
+                "tools_used": self._extract_tools_from_messages(result["messages"])
             }
             
             self.logger.info(f"Agent completed successfully. Tools used: {response['tools_used']}")
@@ -123,16 +80,17 @@ Thought: {agent_scratchpad}"""
             return {
                 "response": f"I encountered an error while processing your request: {str(e)}",
                 "error": str(e),
-                "agent_type": "react",
+                "agent_type": "langgraph_react",
                 "tools_used": []
             }
     
-    def _extract_tools_used(self, intermediate_steps: List) -> List[str]:
-        """Extract the names of tools used during agent execution."""
+    def _extract_tools_from_messages(self, messages: List) -> List[str]:
+        """Extract the names of tools used from LangGraph messages."""
         tools_used = []
-        for step in intermediate_steps:
-            if hasattr(step[0], 'tool'):
-                tools_used.append(step[0].tool)
+        for message in messages:
+            if hasattr(message, 'tool_calls') and message.tool_calls:
+                for tool_call in message.tool_calls:
+                    tools_used.append(tool_call.get('name', 'unknown'))
         return list(set(tools_used))  # Remove duplicates
     
     async def health_check(self) -> Dict[str, Any]:
