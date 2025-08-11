@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 from src.models.schemas import DocumentChunk, SearchResult
-from src.feature_pipeline.query_expansion import QueryExpansionService
+
 from src.config.feature_flags import get_feature_flags
 from src.utils.logger import LoggerMixin
 
@@ -47,7 +47,6 @@ class AdvancedSearchOrchestrator(LoggerMixin):
     def __init__(self, vector_store=None):
         """Initialize the advanced search orchestrator."""
         self.feature_flags = get_feature_flags()
-        self.query_expander = QueryExpansionService()
         self.vector_store = vector_store
         
         # Default search strategy configurations
@@ -98,19 +97,15 @@ class AdvancedSearchOrchestrator(LoggerMixin):
         return final_results[:max_results]
     
     def _prepare_search_context(self, query: str) -> SearchContext:
-        """Prepare search context with query analysis and expansion."""
-        # Clean and preprocess query
-        processed_query = self.query_expander.preprocess_query(query)
+        """Prepare search context with basic query processing."""
+        # Basic query cleaning - remove extra whitespace
+        processed_query = ' '.join(query.split()).strip()
         
-        # Identify query intent
-        intent = self.query_expander.get_query_intent(processed_query)
+        # Simple intent detection based on common patterns
+        intent = self._get_simple_query_intent(processed_query)
         
-        # Expand query if appropriate
-        expanded_queries = []
-        if self.query_expander.should_use_expansion(processed_query):
-            expanded_queries = self.query_expander.expand_query(processed_query)
-        else:
-            expanded_queries = [processed_query]
+        # Use original query without expansion
+        expanded_queries = [processed_query]
         
         context = SearchContext(
             query=processed_query,
@@ -124,8 +119,31 @@ class AdvancedSearchOrchestrator(LoggerMixin):
             }
         )
         
-        self.logger.debug(f"Search context prepared: intent={intent}, expansions={len(expanded_queries)}")
+        self.logger.debug(f"Search context prepared: intent={intent}, query='{processed_query}'")
         return context
+    
+    def _get_simple_query_intent(self, query: str) -> str:
+        """Simple query intent detection without complex expansion logic."""
+        query_lower = query.lower()
+        
+        # Technical queries
+        if any(term in query_lower for term in ['api', 'code', 'function', 'class', 'implement']):
+            return 'technical'
+        
+        # How-to queries
+        elif any(term in query_lower for term in ['how to', 'how do', 'steps', 'tutorial']):
+            return 'how-to'
+        
+        # Problem-solving queries
+        elif any(term in query_lower for term in ['error', 'problem', 'issue', 'fix', 'debug']):
+            return 'problem-solving'
+        
+        # Conceptual queries
+        elif any(term in query_lower for term in ['what is', 'explain', 'concept', 'theory']):
+            return 'conceptual'
+        
+        # Default
+        return 'general'
     
     async def _execute_search_strategies(self, context: SearchContext, max_results: int) -> Dict[SearchStrategy, List[SearchResult]]:
         """Execute multiple search strategies based on query context."""
@@ -347,6 +365,6 @@ class AdvancedSearchOrchestrator(LoggerMixin):
         return {
             "strategies_available": len([s for s in self.search_configs.values() if s.enabled]),
             "advanced_features_enabled": self.feature_flags.should_use_advanced_search(),
-            "query_expansion_enabled": True,
+            "query_expansion_enabled": False,
             "reranking_enabled": False  # Would be True if reranking model is available
         } 

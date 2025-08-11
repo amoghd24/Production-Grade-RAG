@@ -34,8 +34,6 @@ search:
   max_results: 10
   
   # Advanced search settings
-  enable_query_expansion: true
-  max_query_expansions: 3
   enable_result_fusion: true
   enable_diversity_filter: true
   
