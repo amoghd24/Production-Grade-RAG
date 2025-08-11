@@ -16,7 +16,6 @@ from src.utils.logger import LoggerMixin
 class SearchStrategy(str, Enum):
     """Available search strategies."""
     SIMILARITY = "similarity"
-    CONTEXTUAL = "contextual"
     PARENT_CHILD = "parent_child" 
     HYBRID = "hybrid"
     MULTI_VECTOR = "multi_vector"
@@ -58,12 +57,6 @@ class AdvancedSearchOrchestrator(LoggerMixin):
                 weight=0.6,
                 max_results=15,
                 threshold=0.7
-            ),
-            SearchStrategy.CONTEXTUAL: SearchConfig(
-                strategy=SearchStrategy.CONTEXTUAL,
-                weight=0.3,
-                max_results=10,
-                threshold=0.6
             ),
             SearchStrategy.PARENT_CHILD: SearchConfig(
                 strategy=SearchStrategy.PARENT_CHILD,
@@ -166,9 +159,9 @@ class AdvancedSearchOrchestrator(LoggerMixin):
         # Always include similarity search as baseline
         strategies.append(SearchStrategy.SIMILARITY)
         
-        # Add contextual search for conceptual queries
-        if intent in ['conceptual', 'general'] and self.feature_flags.should_use_contextual_chunking():
-            strategies.append(SearchStrategy.CONTEXTUAL)
+        # Add parent-child search for conceptual queries (replacing contextual)
+        if intent in ['conceptual', 'general'] and self.feature_flags.should_use_parent_retrieval():
+            strategies.append(SearchStrategy.PARENT_CHILD)
         
         # Add parent-child search for technical/detailed queries
         if intent in ['technical', 'how-to'] and self.feature_flags.should_use_parent_retrieval():
@@ -187,9 +180,7 @@ class AdvancedSearchOrchestrator(LoggerMixin):
             return False
         
         # Check feature flags
-        if strategy == SearchStrategy.CONTEXTUAL:
-            return self.feature_flags.should_use_contextual_chunking()
-        elif strategy == SearchStrategy.PARENT_CHILD:
+        if strategy == SearchStrategy.PARENT_CHILD:
             return self.feature_flags.should_use_parent_retrieval()
         elif strategy == SearchStrategy.HYBRID:
             return self.feature_flags.should_use_hybrid_search()
@@ -205,8 +196,6 @@ class AdvancedSearchOrchestrator(LoggerMixin):
             # Use real vector store search instead of mocks
             if strategy == SearchStrategy.SIMILARITY:
                 results = await self._real_similarity_search(context, config.max_results)
-            elif strategy == SearchStrategy.CONTEXTUAL:
-                results = await self._real_contextual_search(context, config.max_results)
             elif strategy == SearchStrategy.PARENT_CHILD:
                 results = await self._real_parent_child_search(context, config.max_results)
         except Exception as e:
@@ -326,42 +315,6 @@ class AdvancedSearchOrchestrator(LoggerMixin):
             return results
         except Exception as e:
             self.logger.error(f"Real similarity search failed: {str(e)}")
-            return []
-    
-    async def _real_contextual_search(self, context: SearchContext, max_results: int) -> List[SearchResult]:
-        """Real contextual search using expanded queries."""
-        if not self.vector_store:
-            return []
-        
-        try:
-            # Use expanded queries for contextual search
-            all_results = []
-            
-            for expanded_query in context.expanded_queries:
-                from sentence_transformers import SentenceTransformer
-                from src.config.settings import settings
-                
-                embedding_model = SentenceTransformer(settings.EMBEDDING_MODEL)
-                query_embedding = embedding_model.encode([expanded_query])[0].tolist()
-                
-                results = await self.vector_store.vector_search_service.similarity_search(
-                    query_vector=query_embedding,
-                    limit=max_results // len(context.expanded_queries) + 1,
-                    filters=None
-                )
-                all_results.extend(results)
-            
-            # Remove duplicates and limit results
-            seen_ids = set()
-            unique_results = []
-            for result in all_results:
-                if result.id not in seen_ids:
-                    seen_ids.add(result.id)
-                    unique_results.append(result)
-            
-            return unique_results[:max_results]
-        except Exception as e:
-            self.logger.error(f"Real contextual search failed: {str(e)}")
             return []
     
     async def _real_parent_child_search(self, context: SearchContext, max_results: int) -> List[SearchResult]:

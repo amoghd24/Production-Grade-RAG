@@ -1,7 +1,7 @@
 """
 Advanced RAG Engine for Second Brain AI Assistant.
 Implements Retrieval Augmented Generation with advanced search strategies,
-contextual enhancement, parent-child retrieval, and source attribution.
+parent-child retrieval and source attribution.
 """
 
 import time
@@ -365,8 +365,7 @@ class RAGEngine(LoggerMixin):
         """Get description of search strategy used."""
         if self.feature_flags.should_use_advanced_search():
             strategies = []
-            if self.feature_flags.should_use_contextual_chunking():
-                strategies.append("contextual")
+
             if self.feature_flags.should_use_parent_retrieval():
                 strategies.append("parent-child")
             if self.feature_flags.should_use_hybrid_search():
@@ -382,8 +381,7 @@ class RAGEngine(LoggerMixin):
         features = []
         if self.feature_flags.should_use_advanced_search():
             features.append("advanced_search")
-        if self.feature_flags.should_use_contextual_chunking():
-            features.append("contextual_chunking")
+
         if self.feature_flags.should_use_parent_retrieval():
             features.append("parent_retrieval")
         if self.feature_flags.should_use_hybrid_search():
@@ -454,7 +452,7 @@ class RAGEngine(LoggerMixin):
             "conversation_history_size": len(self.conversation_history),
             "feature_flags_status": {
                 "advanced_search": self.feature_flags.should_use_advanced_search(),
-                "contextual": self.feature_flags.should_use_contextual_chunking(),
+    
                 "parent_child": self.feature_flags.should_use_parent_retrieval(),
                 "hybrid": self.feature_flags.should_use_hybrid_search(),
             }

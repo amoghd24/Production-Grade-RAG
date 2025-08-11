@@ -81,7 +81,6 @@ class Settings(BaseSettings):
     RAG_CONFIG_PATH: str = Field(default="config/rag_config.yaml", env="RAG_CONFIG_PATH")
     
     # Advanced RAG Features
-    ENABLE_CONTEXTUAL_CHUNKING: bool = Field(default=False, env="ENABLE_CONTEXTUAL_CHUNKING")
     ENABLE_PARENT_RETRIEVAL: bool = Field(default=False, env="ENABLE_PARENT_RETRIEVAL")
     ENABLE_HYBRID_SEARCH: bool = Field(default=False, env="ENABLE_HYBRID_SEARCH")
     ENABLE_QUALITY_FILTERING: bool = Field(default=True, env="ENABLE_QUALITY_FILTERING")

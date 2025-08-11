@@ -13,7 +13,6 @@ from src.utils.logger import LoggerMixin
 class FeatureFlag(str, Enum):
     """Available feature flags."""
     ADVANCED_RAG = "advanced_rag"
-    CONTEXTUAL_CHUNKING = "contextual_chunking"
     PARENT_RETRIEVAL = "parent_retrieval"
     HYBRID_SEARCH = "hybrid_search"
     QUALITY_FILTERING = "quality_filtering"
@@ -35,7 +34,6 @@ class FeatureFlagManager(LoggerMixin):
         # Load from environment/settings first
         flags = {
             FeatureFlag.ADVANCED_RAG: settings.ENABLE_ADVANCED_RAG,
-            FeatureFlag.CONTEXTUAL_CHUNKING: settings.ENABLE_CONTEXTUAL_CHUNKING,
             FeatureFlag.PARENT_RETRIEVAL: settings.ENABLE_PARENT_RETRIEVAL,
             FeatureFlag.HYBRID_SEARCH: settings.ENABLE_HYBRID_SEARCH,
             FeatureFlag.QUALITY_FILTERING: settings.ENABLE_QUALITY_FILTERING,
@@ -51,7 +49,6 @@ class FeatureFlagManager(LoggerMixin):
                 
                 flags.update({
                     FeatureFlag.ADVANCED_RAG: self._rag_config.enable_advanced_rag,
-                    FeatureFlag.CONTEXTUAL_CHUNKING: self._rag_config.enable_contextual_retrieval,
                     FeatureFlag.PARENT_RETRIEVAL: self._rag_config.enable_parent_retrieval,
                     FeatureFlag.HYBRID_SEARCH: self._rag_config.enable_hybrid_search,
                     FeatureFlag.QUALITY_FILTERING: self._rag_config.enable_quality_filtering,
@@ -97,11 +94,6 @@ class FeatureFlagManager(LoggerMixin):
         
         # Fallback to environment setting
         return settings.RAG_STRATEGY
-    
-    def should_use_contextual_chunking(self) -> bool:
-        """Check if contextual chunking should be used."""
-        return (self.is_enabled(FeatureFlag.ADVANCED_RAG) and 
-                self.is_enabled(FeatureFlag.CONTEXTUAL_CHUNKING))
     
     def should_use_parent_retrieval(self) -> bool:
         """Check if parent retrieval should be used."""

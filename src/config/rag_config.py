@@ -15,7 +15,6 @@ from src.utils.logger import LoggerMixin
 class RAGStrategy(str, Enum):
     """Available RAG strategies."""
     BASIC = "basic"
-    CONTEXTUAL = "contextual"
     PARENT_RETRIEVAL = "parent_retrieval"
     HYBRID = "hybrid"
 
@@ -23,7 +22,6 @@ class RAGStrategy(str, Enum):
 class ChunkingStrategy(str, Enum):
     """Available chunking strategies."""
     BASIC = "basic"
-    CONTEXTUAL = "contextual"
     PARENT_CHILD = "parent_child"
     ADAPTIVE = "adaptive"
 
@@ -32,7 +30,6 @@ class SearchStrategy(str, Enum):
     """Available search strategies."""
     SIMILARITY = "similarity"
     HYBRID = "hybrid"
-    CONTEXTUAL = "contextual"
     PARENT_CHILD = "parent_child"
     MULTI_STRATEGY = "multi_strategy"
 

@@ -2,11 +2,11 @@
 # This file controls the behavior of the Advanced RAG system
 
 # Main strategy selection
-strategy: basic  # Options: basic, contextual, parent_retrieval, hybrid
+strategy: basic  # Options: basic, parent_retrieval, hybrid
 
 # Chunking configuration
 chunking:
-  strategy: parent_child  # Options: basic, contextual, parent_child, adaptive
+  strategy: parent_child  # Options: basic, parent_child, adaptive
   chunk_size: 1000
   chunk_overlap: 200
   
@@ -16,10 +16,7 @@ chunking:
   parent_overlap: 400
   child_overlap: 100
   
-  # Contextual enhancement (only used when strategy is contextual)
-  add_document_context: true
-  add_section_headers: true
-  context_template: null
+
 
 # Embedding configuration
 embedding:
@@ -31,8 +28,8 @@ embedding:
 
 # Search configuration
 search:
-  primary_strategy: multi_strategy  # Options: similarity, hybrid, contextual, parent_child, multi_strategy
-  fallback_strategies: ["similarity", "contextual"]
+  primary_strategy: multi_strategy  # Options: similarity, hybrid, parent_child, multi_strategy
+  fallback_strategies: ["similarity", "parent_child"]
   similarity_threshold: 0.7
   max_results: 10
   
@@ -49,7 +46,6 @@ search:
   # Strategy weights for result fusion
   strategy_weights:
     similarity: 0.6
-    contextual: 0.3
     parent_child: 0.4
     hybrid: 0.5
   
