@@ -5,10 +5,12 @@ Follows Single Responsibility Principle - only handles database connections.
 """
 
 import asyncio
+import os
 from typing import Optional, Dict, Any
 from contextlib import asynccontextmanager
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 from pymongo.errors import ConnectionFailure, ServerSelectionTimeoutError
+from dotenv import load_dotenv
 
 from src.config.settings import settings
 from src.utils.logger import LoggerMixin
@@ -35,8 +37,26 @@ class MongoDBConnection(IDatabaseConnection, LoggerMixin):
             database_name: Name of the database to use
             **kwargs: Additional Motor client options
         """
-        self.connection_string = connection_string or settings.MONGODB_URL
-        self.database_name = database_name or settings.DATABASE_NAME
+        # Explicit environment loading to ensure fresh .env values
+        if connection_string is None:
+            # Force reload .env file to get latest values
+            load_dotenv('.env', override=True)
+            connection_string = os.getenv('MONGODB_URL')
+            
+            # Fallback to settings if env var not found
+            if not connection_string:
+                connection_string = settings.MONGODB_URL
+                self.logger.warning("Using settings fallback for MONGODB_URL - ensure .env file is properly configured")
+            else:
+                self.logger.info("Successfully loaded MONGODB_URL from .env file")
+        
+        if database_name is None:
+            # Load database name from env or use settings fallback
+            load_dotenv('.env', override=True)
+            database_name = os.getenv('DATABASE_NAME') or settings.DATABASE_NAME
+        
+        self.connection_string = connection_string
+        self.database_name = database_name
         
         # Motor client options for production use
         self.client_options = {

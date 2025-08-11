@@ -50,7 +50,7 @@ class SecondBrainAgent(LoggerMixin):
 You have access to the following tools:
 {tools}
 
-Use the following format:
+Use the following format EXACTLY:
 
 Question: the input question you must answer
 Thought: you should always think about what to do
@@ -67,6 +67,8 @@ Key Guidelines:
 3. Be helpful and explain your reasoning process
 4. If you can't find information, be honest about limitations
 5. Always cite sources when providing information from the knowledge base
+6. IMPORTANT: Once you have a good answer from the knowledge base search, provide the Final Answer immediately. Do not continue searching unless the first result is insufficient.
+7. Keep responses concise and focused on the user's question.
 
 Question: {input}
 Thought: {agent_scratchpad}"""
@@ -84,9 +86,10 @@ Thought: {agent_scratchpad}"""
             agent=agent,
             tools=self.tools,
             verbose=True,  # Enable verbose output for debugging
-            max_iterations=5,  # Limit iterations to prevent infinite loops
-            early_stopping_method="generate",
-            handle_parsing_errors=True
+            max_iterations=5,  # Reduced from 20 to prevent long execution times
+            handle_parsing_errors=True,
+            max_execution_time=30,  # Add 30-second timeout
+            early_stopping_method="force"  # Use default force method
         )
     
     async def process_query(self, query: str) -> Dict[str, Any]:

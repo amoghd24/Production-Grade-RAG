@@ -5,6 +5,7 @@ Connects directly to RAG engine without FastAPI.
 
 import os
 import asyncio
+import re
 from typing import Dict, List
 from slack_bolt.async_app import AsyncApp
 from slack_bolt.adapter.socket_mode.async_handler import AsyncSocketModeHandler
@@ -66,19 +67,29 @@ class SecondBrainSlackBot(LoggerMixin):
                 # Get conversation context
                 context = self._get_conversation_context(channel, text)
                 
-                # Query RAG engine
+                # Query RAG engine with timeout handling
                 self.logger.info(f"Processing query from user {user}: {text}")
-                result = await self.agent.process_query(context)
                 
-                # Extract the complete formatted response with sources and confidence
-                response_text = self._format_complete_rag_response(result)
-                
-                # Send response
-                await say(response_text)
-                
-                # Update conversation history
-                self._add_to_conversation(channel, text, result["response"])
-                
+                try:
+                    # Add asyncio timeout as additional safety net
+                    result = await asyncio.wait_for(
+                        self.agent.process_query(context), 
+                        timeout=45.0  # 45-second timeout
+                    )
+                    
+                    # Extract the complete formatted response with sources and confidence
+                    response_text = self._format_complete_rag_response(result)
+                    
+                    # Send the actual response
+                    await say(response_text)
+                    
+                    # Update conversation history
+                    self._add_to_conversation(channel, text, result["response"])
+                    
+                except asyncio.TimeoutError:
+                    await say("⏰ Sorry, your query is taking longer than expected. Please try a more specific question or try again later.")
+                    self.logger.error(f"Query timeout for user {user}: {text}")
+                    
             except Exception as e:
                 self.logger.error(f"Error handling message: {e}")
                 await say("Sorry, I encountered an error processing your message.")
@@ -100,16 +111,25 @@ class SecondBrainSlackBot(LoggerMixin):
                 # Get conversation context
                 context = self._get_conversation_context(channel, text)
                 
-                # Query RAG engine
-                result = await self.agent.process_query(context)
-                
-                # Extract the complete formatted response with sources and confidence
-                response_text = self._format_complete_rag_response(result)
-                
-                await say(response_text)
-                
-                # Update conversation history
-                self._add_to_conversation(channel, text, result["response"])
+                # Query RAG engine with timeout handling
+                try:
+                    # Add asyncio timeout as additional safety net
+                    result = await asyncio.wait_for(
+                        self.agent.process_query(context), 
+                        timeout=45.0  # 45-second timeout
+                    )
+                    
+                    # Extract the complete formatted response with sources and confidence
+                    response_text = self._format_complete_rag_response(result)
+                    
+                    await say(response_text)
+                    
+                    # Update conversation history
+                    self._add_to_conversation(channel, text, result["response"])
+                    
+                except asyncio.TimeoutError:
+                    await say("⏰ Sorry, your query is taking longer than expected. Please try a more specific question or try again later.")
+                    self.logger.error(f"Query timeout for mention: {text}")
                 
             except Exception as e:
                 self.logger.error(f"Error handling mention: {e}")
@@ -149,8 +169,23 @@ class SecondBrainSlackBot(LoggerMixin):
     
     def _clean_mention(self, text: str) -> str:
         """Remove bot mention from text."""
-        import re
         return re.sub(r'<@[A-Z0-9]+>', '', text).strip()
+    
+    def _convert_markdown_to_slack(self, text: str) -> str:
+        """Convert markdown formatting to Slack format."""
+        # Convert [text](url) to <url|text>
+        text = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', r'<\2|\1>', text)
+        
+        # Convert **bold** to *bold* (more robust pattern)
+        text = re.sub(r'\*\*([^*]+)\*\*', r'*\1*', text)
+        
+        # Convert markdown headers (### Header) to bold (*Header*)
+        text = re.sub(r'^#{1,6}\s*(.+)$', r'*\1*', text, flags=re.MULTILINE)
+        
+        # Convert bare URLs in parentheses to clickable links
+        text = re.sub(r'\(https?://[^)]+\)', lambda m: f'<{m.group(0)[1:-1]}>', text)
+        
+        return text
     
     def _format_complete_rag_response(self, result: Dict) -> str:
         """Format the complete RAG response with sources and confidence like in terminal."""
@@ -170,9 +205,9 @@ class SecondBrainSlackBot(LoggerMixin):
                         full_response = tool_output
                         break
             
-            # If we found the full formatted response from tools, use it
+            # If we found the full formatted response from tools, use it tim
             if full_response:
-                return full_response
+                return self._convert_markdown_to_slack(full_response)
             
             # Fallback: build our own formatted response
             formatted_response = main_response
@@ -190,7 +225,7 @@ class SecondBrainSlackBot(LoggerMixin):
                 if sources_info:
                     formatted_response += f"\n\n{sources_info}"
             
-            return formatted_response
+            return self._convert_markdown_to_slack(formatted_response)
             
         except Exception as e:
             self.logger.error(f"Error formatting complete RAG response: {e}")

@@ -24,6 +24,7 @@ wheels/
 sb-env/
 venv/
 ENV/
+second-brain-env/
 
 # IDE
 .idea/

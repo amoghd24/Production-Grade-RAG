@@ -115,7 +115,7 @@ class RAGConfiguration(BaseModel):
     
     # Performance settings
     max_concurrent_requests: int = Field(default=10, ge=1, le=100)
-    request_timeout: int = Field(default=30, ge=5, le=300)
+    request_timeout: int = Field(default=300, ge=5, le=3000)
     cache_enabled: bool = Field(default=True)
     cache_ttl: int = Field(default=3600, ge=60)  # 1 hour default
     
